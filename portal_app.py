@@ -42,11 +42,18 @@ def file(vid,group,name):
 @app.post('/api/upload')
 def upload():
     if API_KEY and request.headers.get('X-AWM-Key')!=API_KEY: abort(401)
+    # Accept both multipart upload and a raw application/zip body.
     f=request.files.get('file')
-    if not f: return jsonify(error='missing file'),400
     tmp=Path(tempfile.mkdtemp())
     try:
-        z=tmp/'u.zip'; f.save(z)
+        z=tmp/'u.zip'
+        if f:
+            f.save(z)
+        else:
+            raw=request.get_data(cache=False)
+            if not raw:
+                return jsonify(error='missing file'),400
+            z.write_bytes(raw)
         with zipfile.ZipFile(z) as zz: zz.extractall(tmp/'x')
         roots=[p for p in (tmp/'x').iterdir() if p.is_dir()]
         src=roots[0] if len(roots)==1 else tmp/'x'
