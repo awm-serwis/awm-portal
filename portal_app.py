@@ -118,3 +118,7 @@ def publish():
         c.commit(); c.close(); return jsonify(ok=True,id=pid)
     except Exception as ex: return jsonify(error=str(ex)),400
     finally: shutil.rmtree(td,ignore_errors=True)
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', '10000'))
+    app.run(host='0.0.0.0', port=port, debug=False)
