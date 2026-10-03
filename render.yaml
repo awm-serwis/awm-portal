@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: przeglad-awm-portal
+    runtime: python
+    buildCommand: pip install -r requirements-portal.txt
+    startCommand: gunicorn portal_app:app
+    envVars:
+      - key: AWM_API_KEY
+        generateValue: true
+      - key: AWM_DATA_DIR
+        value: /var/data/awm_portal
+    disk:
+      name: awm-data
+      mountPath: /var/data
+      sizeGB: 1
