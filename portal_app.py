@@ -1,4 +1,4 @@
-import os, json, zipfile, shutil, tempfile
+import os, json, zipfile, shutil, tempfile, time
 from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory, abort, render_template_string, redirect
 
@@ -130,9 +130,18 @@ def upload():
             if not found:return jsonify(error='vehicle.json missing'),400
             mp=found[0]; src=mp.parent
         m=json.loads(mp.read_text(encoding='utf-8'))
-        vid=safe(m.get('vin') or m.get('rejestracja') or 'AUTO')
+        # Każde wysłanie dostaje własny katalog. Dzięki temu drugi pojazd
+        # nie nadpisze pierwszego nawet wtedy, gdy dane identyfikacyjne są takie same.
+        base_vid=safe(m.get('vin') or m.get('rejestracja') or 'AUTO')
+        vid=base_vid
         dst=VEH/vid
-        if dst.exists():shutil.rmtree(dst)
+        if dst.exists():
+            stamp=str(int(time.time()*1000))
+            vid=safe(base_vid + '_' + stamp)
+            dst=VEH/vid
+            while dst.exists():
+                stamp=str(int(time.time()*1000))
+                vid=safe(base_vid + '_' + stamp)
         shutil.copytree(src,dst)
         return jsonify(ok=True,id=vid,message='Pojazd został udostępniony na portal')
     except zipfile.BadZipFile:return jsonify(error='invalid ZIP file'),400
