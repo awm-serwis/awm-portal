@@ -57,7 +57,7 @@ async function logout(){await fetch('/api/logout',{method:'POST'});location.relo
 async function load(){let[r,x]=await j('/api/vehicles');V=Array.isArray(x)?x:[];render()}
 function e(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>v.docs.filter(d=>d.kind===k).map(d=>`<a class="a ${k==='wycena'?'green':k==='raport'?'dark':''}" href="/file/${d.id}" target="_blank">${k==='opis'?'📄 PODGLĄD OPISU':k==='wycena'?'💰 PODGLĄD WYCENY':'🔧 PODGLĄD RAPORTU DIAG'}</a>`).join('');return `<div class="row">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}<div><b style="font-size:18px">${e(v.marka)} ${e(v.model)}</b><div class="muted">${e(v.rok)}</div></div><div><b>${e(v.rej)}</b><div class="muted">${e(v.vin)}</div></div><div>${e(v.przebieg||'—')}</div><div class="actions">${b('opis')}${b('wycena')}${b('raport')}</div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
-let PV=[],PI=0;function openPic(id){let v=V.find(x=>String(x.id)===String(id));PV=(v&&v.photos)||[];if(!PV.length&&v&&v.photo)PV=[v.photo];PI=0;if(PV.length){$('bigpic').src='/file/'+PV[0];$('modal').classList.add('on')}}function stepPic(n,ev){if(ev)ev.stopPropagation();if(!PV.length)return;PI=(PI+n+PV.length)%PV.length;$('bigpic').src='/file/'+PV[PI]}function closePic(ev){if(ev&&ev.target&&ev.target.id==='bigpic')return;$('modal').classList.remove('on');$('bigpic').src=''}document.addEventListener('keydown',e=>{if(!$('modal').classList.contains('on'))return;if(e.key==='Escape')closePic();if(e.key==='ArrowLeft')stepPic(-1);if(e.key==='ArrowRight')stepPic(1)});$('q').oninput=render;boot();</script></body></html>'''
+let PV=[],PI=0;function openPic(id){let v=V.find(x=>String(x.id)===String(id));PV=(v&&v.photos)||[];if(!PV.length&&v&&v.photo)PV=[v.photo];PI=0;if(PV.length){$('bigpic').src='/file/'+PV[0];$('modal').classList.add('on');updateCount()}}function updateCount(){let x=document.getElementById('piccount');if(x)x.textContent=PV.length?(PI+1)+' / '+PV.length:''}function stepPic(n,ev){if(ev)ev.stopPropagation();if(!PV.length)return;PI=(PI+n+PV.length)%PV.length;$('bigpic').src='/file/'+PV[PI];updateCount()}function closePic(ev){if(ev&&ev.target&&ev.target.id==='bigpic')return;$('modal').classList.remove('on');$('bigpic').src=''}document.addEventListener('keydown',e=>{if(!$('modal').classList.contains('on'))return;if(e.key==='Escape')closePic();if(e.key==='ArrowLeft')stepPic(-1);if(e.key==='ArrowRight')stepPic(1)});$('q').oninput=render;boot();</script></body></html>'''
 
 @app.get('/')
 def home(): return Response(HTML, mimetype='text/html')
@@ -179,7 +179,9 @@ def publish():
                 for f in src.iterdir():
                     if f.is_file():
                         dst=d/(secrets.token_hex(4)+'_'+safe(f.name)); shutil.copy2(f,dst); c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,kind,f.name,str(dst)))
-        c.commit(); c.close(); return jsonify(ok=True,id=pid)
+        c.commit()
+        counts={k:c.execute('select count(*) n from docs where vehicle_id=? and kind=?',(vid,k)).fetchone()['n'] for k in ('photo','thumb','opis','wycena','raport')}
+        c.close(); return jsonify(ok=True,id=pid,files=counts)
     except Exception as ex: return jsonify(error=str(ex)),400
     finally: shutil.rmtree(td,ignore_errors=True)
 
