@@ -160,6 +160,91 @@ def expire(pid):
         except Exception: pass
     shutil.rmtree(FILES/str(vid),ignore_errors=True)
     return jsonify(ok=True,deleted=True)
+def _zip_request_to_temp(prefix):
+    td=Path(tempfile.mkdtemp(prefix=prefix))
+    zp=td/'p.zip'
+    # Keep the original, known-working request.get_data() transport.
+    zp.write_bytes(request.get_data())
+    with zipfile.ZipFile(zp) as z:
+        z.extractall(td/'x')
+    return td
+
+@app.post('/api/publish-auto')
+def publish_auto():
+    if not api_ok(): return jsonify(error='bad key'),403
+    pid=(request.args.get('id') or '').strip()
+    if not pid: return jsonify(error='missing id'),400
+    td=None
+    try:
+        td=_zip_request_to_temp('awm_auto_')
+        meta=json.loads((td/'x'/'vehicle.json').read_text(encoding='utf-8'))
+        c=db(); r=c.execute('select id from vehicles where portal_id=?',(pid,)).fetchone()
+        if r:
+            vid=r['id']
+            # AUTO refreshes only photos/thumbs; documents remain untouched.
+            olds=c.execute("select id,path from docs where vehicle_id=? and kind in ('photo','thumb')",(vid,)).fetchall()
+            for old in olds:
+                try: Path(old['path']).unlink(missing_ok=True)
+                except Exception: pass
+            c.execute("delete from docs where vehicle_id=? and kind in ('photo','thumb')",(vid,))
+            c.execute('update vehicles set marka=?,model=?,rej=?,vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',
+                      (meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),
+                       meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'),vid))
+        else:
+            cur=c.execute('insert into vehicles(portal_id,marka,model,rej,vin,przebieg,rok,updated,active) values(?,?,?,?,?,?,?,?,1)',
+                          (pid,meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),
+                           meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes')))
+            vid=cur.lastrowid
+        d=FILES/str(vid); d.mkdir(parents=True,exist_ok=True)
+        counts={}
+        for folder,kind in {'ZDJECIA':'photo','MINIATURY':'thumb'}.items():
+            src=td/'x'/folder; n=0
+            if src.is_dir():
+                for f in src.iterdir():
+                    if f.is_file():
+                        dst=d/(secrets.token_hex(4)+'_'+safe(f.name)); shutil.copy2(f,dst)
+                        c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,kind,f.name,str(dst))); n+=1
+            counts[kind]=n
+        c.commit(); c.close()
+        return jsonify(ok=True,id=pid,files=counts)
+    except Exception as ex:
+        return jsonify(error=str(ex)),400
+    finally:
+        if td: shutil.rmtree(td,ignore_errors=True)
+
+@app.post('/api/publish-docs')
+def publish_docs():
+    if not api_ok(): return jsonify(error='bad key'),403
+    pid=(request.args.get('id') or '').strip()
+    if not pid: return jsonify(error='missing id'),400
+    td=None
+    try:
+        td=_zip_request_to_temp('awm_docs_')
+        c=db(); r=c.execute('select id from vehicles where portal_id=?',(pid,)).fetchone()
+        if not r: c.close(); return jsonify(error='vehicle not found - send AUTO first'),404
+        vid=r['id']; d=FILES/str(vid); d.mkdir(parents=True,exist_ok=True)
+        counts={}
+        for folder,kind in {'OPIS':'opis','WYCENA':'wycena','DIAG':'raport'}.items():
+            # Replace only this document type; AUTO/photos remain untouched.
+            olds=c.execute('select id,path from docs where vehicle_id=? and kind=?',(vid,kind)).fetchall()
+            for old in olds:
+                try: Path(old['path']).unlink(missing_ok=True)
+                except Exception: pass
+            c.execute('delete from docs where vehicle_id=? and kind=?',(vid,kind))
+            src=td/'x'/folder; files=[f for f in src.iterdir() if f.is_file()] if src.is_dir() else []
+            if files: files=[max(files,key=lambda f:f.stat().st_mtime)]
+            for f in files:
+                dst=d/(secrets.token_hex(4)+'_'+safe(f.name)); shutil.copy2(f,dst)
+                c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,kind,f.name,str(dst)))
+            counts[kind]=len(files)
+        c.execute('update vehicles set updated=? where id=?',(datetime.now().isoformat(timespec='minutes'),vid))
+        c.commit(); c.close()
+        return jsonify(ok=True,id=pid,files=counts)
+    except Exception as ex:
+        return jsonify(error=str(ex)),400
+    finally:
+        if td: shutil.rmtree(td,ignore_errors=True)
+
 @app.post('/api/publish')
 def publish():
     if not api_ok(): return jsonify(error='bad key'),403
