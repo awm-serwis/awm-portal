@@ -162,13 +162,19 @@ def expire(pid):
     return jsonify(ok=True,deleted=True)
 @app.post('/api/publish')
 def publish():
+    import time
+    _t0=time.perf_counter()
     if not api_ok(): return jsonify(error='bad key'),403
     pid=(request.args.get('id') or '').strip()
     if not pid: return jsonify(error='missing id'),400
     td=Path(tempfile.mkdtemp(prefix='awm53_'))
     try:
-        zp=td/'p.zip'; zp.write_bytes(request.get_data())
-        with zipfile.ZipFile(zp) as z: z.extractall(td/'x')
+        # FAST UPLOAD: zapis strumieniowy, bez pełnej kopii ZIP-a w RAM.
+        zp=td/'p.zip'
+        with zp.open('wb') as fh:
+            shutil.copyfileobj(request.stream, fh, length=1024*1024)
+        with zipfile.ZipFile(zp) as z:
+            z.extractall(td/'x')
         meta=json.loads((td/'x'/'vehicle.json').read_text(encoding='utf-8'))
         c=db(); r=c.execute('select id from vehicles where portal_id=?',(pid,)).fetchone()
         if r:
@@ -189,7 +195,7 @@ def publish():
                     dst=d/(secrets.token_hex(4)+'_'+safe(f.name)); shutil.copy2(f,dst); c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,kind,f.name,str(dst)))
         c.commit()
         counts={k:c.execute('select count(*) n from docs where vehicle_id=? and kind=?',(vid,k)).fetchone()['n'] for k in ('photo','thumb','opis','wycena','raport')}
-        c.close(); return jsonify(ok=True,id=pid,files=counts)
+        c.close(); return jsonify(ok=True,id=pid,files=counts,server_seconds=round(time.perf_counter()-_t0,2))
     except Exception as ex: return jsonify(error=str(ex)),400
     finally: shutil.rmtree(td,ignore_errors=True)
 
