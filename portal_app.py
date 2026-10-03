@@ -29,11 +29,11 @@ def okp(p,h):
 def init_db():
     c=db(); c.executescript('''
     CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,login TEXT UNIQUE,pass TEXT,role TEXT);
-    CREATE TABLE IF NOT EXISTS vehicles(id INTEGER PRIMARY KEY,portal_id TEXT UNIQUE,marka TEXT,model TEXT,rej TEXT,vin TEXT,przebieg TEXT,rok TEXT,updated TEXT,active INTEGER DEFAULT 1,show_opis INTEGER DEFAULT 1,show_wycena INTEGER DEFAULT 1,show_raport INTEGER DEFAULT 1);
+    CREATE TABLE IF NOT EXISTS vehicles(id INTEGER PRIMARY KEY,portal_id TEXT UNIQUE,marka TEXT,model TEXT,rej TEXT,vin TEXT,przebieg TEXT,rok TEXT,updated TEXT,active INTEGER DEFAULT 1,show_opis INTEGER DEFAULT 1,show_wycena INTEGER DEFAULT 1,show_raport INTEGER DEFAULT 1,show_wycena_ai INTEGER DEFAULT 1);
     CREATE TABLE IF NOT EXISTS docs(id INTEGER PRIMARY KEY,vehicle_id INTEGER,kind TEXT,name TEXT,path TEXT);
     ''')
     cols={r[1] for r in c.execute('pragma table_info(vehicles)').fetchall()}
-    for col in ('show_opis','show_wycena','show_raport'):
+    for col in ('show_opis','show_wycena','show_raport','show_wycena_ai'):
         if col not in cols: c.execute(f'alter table vehicles add column {col} INTEGER DEFAULT 1')
     if not c.execute('select 1 from users where login=?',(ADMIN_USER,)).fetchone():
         c.execute('insert into users(login,pass,role) values(?,?,?)',(ADMIN_USER,ph(ADMIN_PASS),'admin'))
@@ -43,26 +43,26 @@ init_db()
 def api_ok(): return hmac.compare_digest(request.headers.get('X-AWM-Key',''), API_KEY)
 def safe(n): return ''.join(ch for ch in Path(n).name if ch.isalnum() or ch in ' ._-()[]')[:160] or 'plik'
 def vdict(r):
-    return {'id':r['portal_id'] or str(r['id']),'marka':r['marka'],'model':r['model'],'rejestracja':r['rej'],'rej':r['rej'],'vin':r['vin'],'przebieg':r['przebieg'],'rok':r['rok'],'aktualizacja':r['updated'],'updated':r['updated'],'active':bool(r['active']),'show_opis':bool(r['show_opis']),'show_wycena':bool(r['show_wycena']),'show_raport':bool(r['show_raport'])}
+    return {'id':r['portal_id'] or str(r['id']),'marka':r['marka'],'model':r['model'],'rejestracja':r['rej'],'rej':r['rej'],'vin':r['vin'],'przebieg':r['przebieg'],'rok':r['rok'],'aktualizacja':r['updated'],'updated':r['updated'],'active':bool(r['active']),'show_opis':bool(r['show_opis']),'show_wycena':bool(r['show_wycena']),'show_raport':bool(r['show_raport']),'show_wycena_ai':bool(r['show_wycena_ai'])}
 
 HTML = r'''<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AWM Portal</title><style>
-*{box-sizing:border-box}body{margin:0;font:14px Segoe UI,Arial;background:#f3f7f5;color:#14241e}.top{background:linear-gradient(90deg,#031d16,#07533a);color:#fff;padding:22px 5%;display:flex;align-items:center}.brand{font-size:32px;font-weight:900}.brand b{color:#21d17d}.sub{opacity:.85}.who{margin-left:auto}.wrap{max-width:1450px;margin:auto;padding:28px}.card,.row{background:#fff;border:1px solid #dce7e2;border-radius:12px;box-shadow:0 2px 10px #0000000b}.login{max-width:430px;margin:8vh auto;padding:30px}.login input,.search{width:100%;padding:13px;border:1px solid #cbd8d3;border-radius:8px;margin:7px 0}.btn{border:0;border-radius:7px;padding:11px 15px;font-weight:800;cursor:pointer;background:#0a9a57;color:#fff}.ghost{background:#eaf2ee;color:#17352a}.toolbar{display:flex;gap:10px;margin-bottom:18px}.row{display:grid;grid-template-columns:150px 1.3fr 1.1fr .7fr 2fr;gap:16px;align-items:center;padding:14px;margin-bottom:10px}.pic{width:140px;height:90px;object-fit:cover;border-radius:8px;background:#e7eeeb;cursor:zoom-in}.modal{display:none;position:fixed;z-index:99;inset:0;background:#000d;align-items:center;justify-content:center}.modal.on{display:flex}.modal img{max-width:92vw;max-height:90vh;object-fit:contain;border-radius:8px}.nav{position:fixed;top:50%;font-size:48px;color:#fff;cursor:pointer;padding:20px;user-select:none}.prev{left:2vw}.next{right:2vw}.close{position:fixed;right:3vw;top:2vh;color:#fff;font-size:38px;cursor:pointer}.actions{display:flex;gap:7px;flex-wrap:nowrap;align-items:center;white-space:nowrap}.a{padding:10px 12px;border-radius:7px;color:#fff;text-decoration:none;font-weight:800;background:#176fd0}.green{background:#0b9b56}.dark{background:#26332e}.muted{color:#6d7d76}.hidden{display:none}.empty{padding:50px;text-align:center}.status{font-weight:700;color:#21d17d}@media(max-width:900px){.row{grid-template-columns:1fr}.pic{width:100%;height:200px}}</style></head><body>
-<header class="top"><div><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="who" id="who"><span class="status">● ONLINE</span></div></header>
-<main class="wrap"><section id="login" class="card login"><h2>Logowanie do AWM Portal</h2><input id="lu" placeholder="Login"><input id="lp" type="password" placeholder="Hasło"><button class="btn" onclick="login()">ZALOGUJ</button><p id="err"></p></section><section id="app" class="hidden"><div class="toolbar"><input id="q" class="search" placeholder="Szukaj: marka, model, VIN, rejestracja..."><button class="btn ghost" onclick="logout()">Wyloguj</button></div><div id="list"></div></section></main><div id=modal class=modal onclick=closePic(event)><span class=close onclick=closePic(event)>×</span><span class="nav prev" onclick=stepPic(-1,event)>‹</span><img id=bigpic><span class="nav next" onclick=stepPic(1,event)>›</span></div>
+*{box-sizing:border-box}body{margin:0;font:14px Segoe UI,Arial;background:linear-gradient(180deg,#f4f8f6,#edf5f2);color:#14241e}.top{background:linear-gradient(90deg,#00392b,#006044,#003d2e);color:#fff;padding:26px 5%;display:flex;align-items:center;min-height:120px;box-shadow:0 5px 18px #063b2b22}.brand{font-size:36px;font-weight:950;letter-spacing:.3px}.brand b{color:#21d17d}.sub{opacity:.85}.who{margin-left:auto}.wrap{max-width:1580px;margin:auto;padding:24px 34px 50px;position:relative}.wrap:after{content:'AWM';position:fixed;z-index:-1;left:50%;top:72%;transform:translate(-50%,-50%);font-size:min(24vw,360px);font-weight:950;letter-spacing:-18px;color:#08704d0b}.card,.row{background:#fff;border:1px solid #dce7e2;border-radius:12px;box-shadow:0 2px 10px #0000000b}.login{max-width:430px;margin:8vh auto;padding:30px}.login input,.search{width:100%;padding:13px;border:1px solid #cbd8d3;border-radius:8px;margin:7px 0}.btn{border:0;border-radius:7px;padding:11px 15px;font-weight:800;cursor:pointer;background:#0a9a57;color:#fff}.ghost{background:#eaf2ee;color:#17352a}.toolbar{display:flex;gap:10px;margin-bottom:18px}.row{display:grid;grid-template-columns:270px 1.25fr 1fr .65fr 2fr;gap:20px;align-items:center;padding:16px;margin-bottom:14px;border-radius:16px;box-shadow:0 7px 22px #0b3b2914}.pic{width:260px;height:155px;object-fit:cover;border-radius:8px;background:#e7eeeb;cursor:zoom-in}.modal{display:none;position:fixed;z-index:99;inset:0;background:#000d;align-items:center;justify-content:center}.modal.on{display:flex}.modal img{max-width:92vw;max-height:90vh;object-fit:contain;border-radius:8px}.nav{position:fixed;top:50%;font-size:48px;color:#fff;cursor:pointer;padding:20px;user-select:none}.prev{left:2vw}.next{right:2vw}.close{position:fixed;right:3vw;top:2vh;color:#fff;font-size:38px;cursor:pointer}.actions{display:flex;gap:7px;flex-wrap:nowrap;align-items:center;white-space:nowrap}.a{padding:18px 14px;border-radius:12px;min-height:92px;display:flex;align-items:center;justify-content:center;text-align:center;box-shadow:0 5px 12px #0002;color:#fff;text-decoration:none;font-weight:800;background:#176fd0}.green{background:#0b9b56}.dark{background:#26332e}.gold{background:linear-gradient(#efb10b,#c98100)}.muted{color:#6d7d76}.hidden{display:none}.empty{padding:50px;text-align:center}.status{font-weight:700;color:#21d17d}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:20px}.stat{background:#fff;border:1px solid #dce7e2;border-radius:14px;padding:18px 22px;box-shadow:0 5px 18px #0a3d2b12;display:flex;gap:15px;align-items:center}.stat i{font-style:normal;font-size:27px;background:#edf7f3;border-radius:12px;padding:10px}.stat strong{font-size:25px}.stat span{display:block;color:#62766e;font-weight:700;margin-top:4px}@media(max-width:900px){.row{grid-template-columns:1fr}.pic{width:100%;height:200px}}</style></head><body>
+<header class="top"><div><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div style="margin-left:auto;margin-right:42px;font-size:22px;font-style:italic;line-height:1.05;text-align:center">Diagnostyka<br>Wycena<br>Pewność</div><div class="who" id="who"><span class="status">● ONLINE</span></div></header>
+<main class="wrap"><section id="login" class="card login"><h2>Logowanie do AWM Portal</h2><input id="lu" placeholder="Login"><input id="lp" type="password" placeholder="Hasło"><button class="btn" onclick="login()">ZALOGUJ</button><p id="err"></p></section><section id="app" class="hidden"><div class="stats"><div class="stat"><i>🚘</i><div><strong id="sc">0</strong><span>POJAZDÓW W PORTALU</span></div></div><div class="stat"><i>📋</i><div><strong id="sd">0</strong><span>RAPORTÓW DIAG</span></div></div><div class="stat"><i>💰</i><div><strong id="sa">0</strong><span>WYCEN AI</span></div></div><div class="stat"><i>📷</i><div><strong id="sp">0</strong><span>ZDJĘĆ</span></div></div></div><div class="toolbar"><input id="q" class="search" placeholder="Szukaj: marka, model, VIN, rejestracja..."><button class="btn ghost" onclick="logout()">Wyloguj</button></div><div id="list"></div></section></main><div id=modal class=modal onclick=closePic(event)><span class=close onclick=closePic(event)>×</span><span class="nav prev" onclick=stepPic(-1,event)>‹</span><img id=bigpic><span class="nav next" onclick=stepPic(1,event)>›</span></div>
 <script>
 let V=[];const $=x=>document.getElementById(x);async function j(u,o){let r=await fetch(u,o);let x={};try{x=await r.json()}catch(e){}return[r,x]}
 async function boot(){let[r,x]=await j('/api/me');if(x.user){$('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').innerHTML='<span class="status">● ONLINE</span> &nbsp; '+x.user.login;load()}}
 async function login(){let[r,x]=await j('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login:$('lu').value,password:$('lp').value})});if(r.ok)location.reload();else $('err').textContent=x.error||'Błąd logowania'}
 async function logout(){await fetch('/api/logout',{method:'POST'});location.reload()}
-async function load(){let[r,x]=await j('/api/vehicles');V=Array.isArray(x)?x:[];render()}
+async function load(){let[r,x]=await j('/api/vehicles');V=Array.isArray(x)?x:[];document.getElementById('sc').textContent=V.length;document.getElementById('sd').textContent=V.filter(v=>v.docs.some(d=>d.kind==='raport')).length;document.getElementById('sa').textContent=V.filter(v=>v.docs.some(d=>d.kind==='wycena_ai')).length;document.getElementById('sp').textContent=V.reduce((n,v)=>n+(v.photos||[]).length,0);render()}
 function e(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>{let d=v.docs.find(d=>d.kind===k);return d?`<a class="a ${k==='wycena'?'green':k==='raport'?'dark':''}" href="/file/${d.id}" target="_blank">${k==='opis'?'📄 PODGLĄD OPISU':k==='wycena'?'💰 PODGLĄD WYCENY':'🔧 PODGLĄD RAPORTU DIAG'}</a>`:''};return `<div class="row">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}<div><b style="font-size:18px">${e(v.marka)} ${e(v.model)}</b><div class="muted">${e(v.rok)}</div></div><div><b>${e(v.rej)}</b><div class="muted">${e(v.vin)}</div></div><div>${e(v.przebieg||'—')}</div><div class="actions">${b('opis')}${b('wycena')}${b('raport')}</div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
+function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>{let d=v.docs.find(d=>d.kind===k);return d?`<a class="a ${k==='wycena'?'green':k==='raport'?'dark':k==='wycena_ai'?'gold':''}" href="/file/${d.id}" target="_blank">${k==='opis'?'📄 PODGLĄD OPISU':k==='wycena'?'💰 PODGLĄD WYCENY':k==='raport'?'🔧 PODGLĄD RAPORTU DIAG':'🤖 WYCENA AI'}</a>`:''};return `<div class="row">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}<div><b style="font-size:18px">${e(v.marka)} ${e(v.model)}</b><div class="muted">${e(v.rok)}</div></div><div><b>${e(v.rej)}</b><div class="muted">${e(v.vin)}</div></div><div>${e(v.przebieg||'—')}</div><div class="actions">${b('opis')}${b('wycena')}${b('raport')}${b('wycena_ai')}</div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
 let PV=[],PI=0;function openPic(id){let v=V.find(x=>String(x.id)===String(id));PV=(v&&v.photos)||[];if(!PV.length&&v&&v.photo)PV=[v.photo];PI=0;if(PV.length){$('bigpic').src='/file/'+PV[0];$('modal').classList.add('on');updateCount()}}function updateCount(){let x=document.getElementById('piccount');if(x)x.textContent=PV.length?(PI+1)+' / '+PV.length:''}function stepPic(n,ev){if(ev)ev.stopPropagation();if(!PV.length)return;PI=(PI+n+PV.length)%PV.length;$('bigpic').src='/file/'+PV[PI];updateCount()}function closePic(ev){if(ev&&ev.target&&ev.target.id==='bigpic')return;$('modal').classList.remove('on');$('bigpic').src=''}document.addEventListener('keydown',e=>{if(!$('modal').classList.contains('on'))return;if(e.key==='Escape')closePic();if(e.key==='ArrowLeft')stepPic(-1);if(e.key==='ArrowRight')stepPic(1)});$('q').oninput=render;boot();</script></body></html>'''
 
 @app.get('/')
 def home(): return Response(HTML, mimetype='text/html')
 @app.get('/health')
-def health(): return jsonify(ok=True, version='5.3-web-fix')
+def health(): return jsonify(ok=True, version='5.3-v48-premium-ui')
 @app.get('/api/me')
 def me(): return jsonify(user=session.get('user'))
 @app.post('/api/login')
@@ -77,9 +77,9 @@ def vehicles():
     if not session.get('user'): return jsonify(error='login'),401
     c=db(); out=[]
     for r in c.execute('select * from vehicles where active=1 order by updated desc'):
-        x=dict(r); ds=[dict(d) for d in c.execute('select id,kind,name from docs where vehicle_id=? order by id desc',(r['id'],))]; ds=[d for d in ds if d['kind'] not in ('opis','wycena','raport') or (d['kind']=='opis' and r['show_opis']) or (d['kind']=='wycena' and r['show_wycena']) or (d['kind']=='raport' and r['show_raport'])]; seen=set(); clean=[]
+        x=dict(r); ds=[dict(d) for d in c.execute('select id,kind,name from docs where vehicle_id=? order by id desc',(r['id'],))]; ds=[d for d in ds if d['kind'] not in ('opis','wycena','raport','wycena_ai') or (d['kind']=='opis' and r['show_opis']) or (d['kind']=='wycena' and r['show_wycena']) or (d['kind']=='raport' and r['show_raport']) or (d['kind']=='wycena_ai' and r['show_wycena_ai'])]; seen=set(); clean=[]
         for d in ds:
-            if d['kind'] in ('opis','wycena','raport'):
+            if d['kind'] in ('opis','wycena','raport','wycena_ai'):
                 if d['kind'] in seen: continue
                 seen.add(d['kind'])
             clean.append(d)
@@ -118,7 +118,7 @@ def admin_vehicles():
     if not api_ok(): return jsonify(error='bad key'),403
     c=db(); out=[]
     for r in c.execute('select * from vehicles order by updated desc'):
-        x=vdict(r); kinds={d['kind'] for d in c.execute('select kind from docs where vehicle_id=?',(r['id'],)).fetchall()}; x.update(has_opis='opis' in kinds,has_wycena='wycena' in kinds,has_raport='raport' in kinds); out.append(x)
+        x=vdict(r); kinds={d['kind'] for d in c.execute('select kind from docs where vehicle_id=?',(r['id'],)).fetchall()}; x.update(has_opis='opis' in kinds,has_wycena='wycena' in kinds,has_raport='raport' in kinds,has_wycena_ai='wycena_ai' in kinds); out.append(x)
     c.close(); return jsonify(vehicles=out)
 
 @app.post('/api/admin/vehicles/<path:pid>/visibility')
@@ -126,13 +126,13 @@ def visibility(pid):
     if not api_ok(): return jsonify(error='bad key'),403
     x=request.get_json(silent=True) or {}; c=db(); r=c.execute('select id from vehicles where portal_id=?',(pid,)).fetchone()
     if not r: c.close(); return jsonify(error='vehicle not found'),404
-    vals=[1 if x.get(k,False) else 0 for k in ('opis','wycena','raport')]
-    c.execute('update vehicles set show_opis=?,show_wycena=?,show_raport=? where id=?',(*vals,r['id'])); c.commit(); c.close(); return jsonify(ok=True)
+    vals=[1 if x.get(k,False) else 0 for k in ('opis','wycena','raport','wycena_ai')]
+    c.execute('update vehicles set show_opis=?,show_wycena=?,show_raport=?,show_wycena_ai=? where id=?',(*vals,r['id'])); c.commit(); c.close(); return jsonify(ok=True)
 
 @app.post('/api/admin/vehicles/<path:pid>/document/<kind>')
 def add_document(pid,kind):
     if not api_ok(): return jsonify(error='bad key'),403
-    if kind not in ('opis','wycena','raport'): return jsonify(error='bad kind'),400
+    if kind not in ('opis','wycena','raport','wycena_ai'): return jsonify(error='bad kind'),400
     c=db(); r=c.execute('select id from vehicles where portal_id=?',(pid,)).fetchone()
     if not r: c.close(); return jsonify(error='vehicle not found'),404
     vid=r['id']; name=safe(request.args.get('name') or ('dokument_'+kind)); d=FILES/str(vid); d.mkdir(parents=True,exist_ok=True)
@@ -141,7 +141,7 @@ def add_document(pid,kind):
         try: Path(old['path']).unlink(missing_ok=True)
         except: pass
     c.execute('delete from docs where vehicle_id=? and kind=?',(vid,kind)); c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,kind,name,str(dst)))
-    c.execute('update vehicles set '+{'opis':'show_opis','wycena':'show_wycena','raport':'show_raport'}[kind]+'=1 where id=?',(vid,)); c.commit(); c.close(); return jsonify(ok=True)
+    c.execute('update vehicles set '+{'opis':'show_opis','wycena':'show_wycena','raport':'show_raport','wycena_ai':'show_wycena_ai'}[kind]+'=1 where id=?',(vid,)); c.commit(); c.close(); return jsonify(ok=True)
 
 @app.delete('/api/admin/vehicles/<path:pid>')
 def expire(pid):
