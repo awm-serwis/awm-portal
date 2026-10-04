@@ -93,6 +93,12 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 /* AWM force text-only vehicle buttons */
 .actions .a::before,.actions .a::after{content:none!important;display:none!important}
 .actions .a{background-image:none!important;text-indent:0!important;font-size:10px!important;font-weight:800!important;line-height:1!important;text-align:center!important}
+
+/* AWM action buttons visibility fix */
+.actions .a{color:#fff!important;opacity:1!important;visibility:visible!important;font-size:10px!important;font-weight:800!important;line-height:1.05!important;text-shadow:none!important}
+.actions .a.gold{color:#26322e!important}
+.actions .docempty{color:#60736d!important;font-size:8px!important}
+.actions .docempty small{display:block!important;color:#7b8984!important}
 </style></head><body>
 <header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><div class="who" id="who"><span class="status">● ONLINE</span><span>AWM</span><span class="avatar">W</span></div></header>
 <div class="watermark"><div class="car"></div><div class="awm">AWM</div><div class="wm-sub">DIAGNOSTYKA POJAZDÓW</div></div>
