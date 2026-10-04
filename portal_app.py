@@ -1,4 +1,4 @@
-import os, json, sqlite3, secrets, hashlib, hmac, zipfile, tempfile, shutil
+import os, json, sqlite3, secrets, hashlib, hmac, zipfile, tempfile, shutil, subprocess
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file, session, Response
@@ -201,16 +201,47 @@ def visibility(pid):
 @app.post('/api/admin/vehicles/<path:pid>/document/<kind>')
 def add_document(pid,kind):
     if not api_ok(): return jsonify(error='bad key'),403
-    if kind not in ('opis','wycena','raport','wycena_ai'): return jsonify(error='bad kind'),400
+    if kind not in ('opis','opis_pdf','wycena','raport','wycena_ai'): return jsonify(error='bad kind'),400
     c=db(); r=c.execute('select id from vehicles where portal_id=?',(pid,)).fetchone()
     if not r: c.close(); return jsonify(error='vehicle not found'),404
-    vid=r['id']; name=safe(request.args.get('name') or ('dokument_'+kind)); d=FILES/str(vid); d.mkdir(parents=True,exist_ok=True)
-    dst=d/(secrets.token_hex(4)+'_'+name); dst.write_bytes(request.get_data())
+    vid=r['id']; name=safe(request.args.get('name') or ('dokument_'+kind))
+    data=request.get_data()
+    if not data or len(data)<32: c.close(); return jsonify(error='empty document'),400
+    d=FILES/str(vid); d.mkdir(parents=True,exist_ok=True)
+    dst=d/(secrets.token_hex(4)+'_'+name); dst.write_bytes(data)
+    preview=None
+    if kind=='opis' and dst.suffix.lower()=='.docx':
+        td=Path(tempfile.mkdtemp(dir=str(d)))
+        try:
+            office=shutil.which('libreoffice') or shutil.which('soffice') or '/usr/bin/libreoffice'
+            profile=td/'profile'; profile.mkdir()
+            env=os.environ.copy(); env['HOME']=str(td)
+            rr=subprocess.run([office,'-env:UserInstallation=file://'+str(profile),'--headless','--convert-to','pdf','--outdir',str(td),str(dst)],
+                              stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120,env=env)
+            made=td/(dst.stem+'.pdf')
+            if rr.returncode!=0 or not made.is_file() or made.stat().st_size<1000:
+                msg=(rr.stderr or rr.stdout or b'').decode(errors='ignore')[-600:]
+                dst.unlink(missing_ok=True); c.close(); return jsonify(error='server pdf conversion failed',detail=msg),500
+            preview=d/(secrets.token_hex(4)+'_'+Path(name).stem+'.pdf'); shutil.copy2(made,preview)
+        except Exception as ex:
+            dst.unlink(missing_ok=True); c.close(); return jsonify(error='server pdf conversion unavailable',detail=str(ex)),500
+        finally: shutil.rmtree(td,ignore_errors=True)
     for old in c.execute('select id,path from docs where vehicle_id=? and kind=?',(vid,kind)).fetchall():
         try: Path(old['path']).unlink(missing_ok=True)
         except: pass
-    c.execute('delete from docs where vehicle_id=? and kind=?',(vid,kind)); c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,kind,name,str(dst)))
-    c.execute('update vehicles set '+{'opis':'show_opis','opis_pdf':'show_opis','wycena':'show_wycena','raport':'show_raport','wycena_ai':'show_wycena_ai'}[kind]+'=1 where id=?',(vid,)); c.commit(); c.close(); return jsonify(ok=True)
+    c.execute('delete from docs where vehicle_id=? and kind=?',(vid,kind))
+    c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,kind,name,str(dst)))
+    preview_id=None
+    if preview is not None:
+        for old in c.execute("select id,path from docs where vehicle_id=? and kind='opis_pdf'",(vid,)).fetchall():
+            try: Path(old['path']).unlink(missing_ok=True)
+            except: pass
+        c.execute("delete from docs where vehicle_id=? and kind='opis_pdf'",(vid,))
+        cur=c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,'opis_pdf',preview.name,str(preview)))
+        preview_id=cur.lastrowid
+    c.execute('update vehicles set '+{'opis':'show_opis','opis_pdf':'show_opis','wycena':'show_wycena','raport':'show_raport','wycena_ai':'show_wycena_ai'}[kind]+'=1 where id=?',(vid,))
+    c.commit(); c.close()
+    return jsonify(ok=True,size=len(data),preview_generated=bool(preview),preview_id=preview_id)
 
 @app.delete('/api/admin/vehicles/<path:pid>')
 def expire(pid):
