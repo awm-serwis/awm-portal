@@ -154,7 +154,7 @@ def publish_auto():
     if not api_ok():return jsonify(error="unauthorized"),401
     td=None
     try:
-        td,root=_extract(); pid,v=_upsert_vehicle(_meta(root)); _delete_docs(v["id"],["photo","thumb"])
+        td,root=_extract(); m=_meta(root); m["id"]=(request.args.get("id") or m.get("id") or m.get("portal_id") or m.get("vin") or "").strip(); pid,v=_upsert_vehicle(m); _delete_docs(v["id"],["photo","thumb"])
         for folder,kind in (("ZDJECIA","photo"),("MINIATURY","thumb")):
             p=root/folder
             if p.exists():
@@ -168,7 +168,7 @@ def publish_docs():
     if not api_ok():return jsonify(error="unauthorized"),401
     td=None
     try:
-        td,root=_extract(); m=_meta(root); pid=str(m.get("id") or m.get("portal_id") or m.get("vin") or "").strip(); v=_vehicle(pid)
+        td,root=_extract(); m=_meta(root); pid=(request.args.get("id") or str(m.get("id") or m.get("portal_id") or m.get("vin") or "")).strip(); v=_vehicle(pid)
         if not v: return jsonify(error="vehicle not found"),404
         for folder,kind in (("OPIS","opis"),("WYCENA","wycena"),("DIAG","raport")):
             p=root/folder
@@ -184,7 +184,7 @@ def publish():
     if not api_ok():return jsonify(error="unauthorized"),401
     td=None
     try:
-        td,root=_extract(); pid,v=_upsert_vehicle(_meta(root)); _delete_docs(v["id"])
+        td,root=_extract(); m=_meta(root); m["id"]=(request.args.get("id") or m.get("id") or m.get("portal_id") or m.get("vin") or "").strip(); pid,v=_upsert_vehicle(m); _delete_docs(v["id"])
         for folder,kind in (("ZDJECIA","photo"),("MINIATURY","thumb"),("OPIS","opis"),("WYCENA","wycena"),("DIAG","raport")):
             p=root/folder
             if not p.exists(): continue
