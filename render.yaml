@@ -1,9 +1,8 @@
 services:
   - type: web
     name: przeglad-awm-portal
-    runtime: python
-    buildCommand: apt-get update && apt-get install -y libreoffice-writer && pip install -r requirements-portal.txt
-    startCommand: gunicorn portal_app:app
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: AWM_API_KEY
         generateValue: true
