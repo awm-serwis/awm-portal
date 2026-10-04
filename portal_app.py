@@ -282,6 +282,12 @@ def admin_vehicles():
         x=vdict(r); kinds={d['kind'] for d in c.execute('select kind from docs where vehicle_id=?',(r['id'],)).fetchall()}; x.update(has_opis='opis' in kinds,has_wycena='wycena' in kinds,has_raport='raport' in kinds,has_wycena_ai='wycena_ai' in kinds); out.append(x)
     c.close(); return jsonify(vehicles=out)
 
+@app.post('/api/vehicles/<path:pid>/quick-valuation')
+def quick_valuation(pid):
+    if 'user' not in session: return jsonify(error='auth'),401
+    # Production Supabase replaces this route with the server AI implementation.
+    return jsonify(error='Automatyczna wycena AI wymaga aktywnego backendu AWM AI'),503
+
 @app.post('/api/admin/vehicles/<path:pid>/ai-valuation')
 def save_ai_valuation(pid):
     if not api_ok(): return jsonify(error='bad key'),403
