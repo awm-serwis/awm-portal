@@ -62,6 +62,20 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
  .actions{gap:4px!important;display:grid!important;grid-template-columns:repeat(2,78px)!important;justify-content:start!important}
  .actions .a{width:78px!important;min-width:78px!important;max-width:78px!important;height:28px!important;min-height:28px!important;font-size:7px!important;line-height:7px!important;border-radius:7px!important}
 }
+
+/* AWM compact top statistics */
+.stats{gap:14px!important;margin-bottom:12px!important}
+.stat{min-height:58px!important;height:58px!important;padding:8px 16px!important;border-radius:12px!important}
+.stat .ico{width:36px!important;height:36px!important;border-radius:10px!important;font-size:19px!important}
+.stat strong{font-size:20px!important;line-height:20px!important}
+.stat span{font-size:9px!important;margin-top:3px!important}
+@media(max-width:700px){
+ .stats{gap:7px!important;grid-template-columns:repeat(2,1fr)!important}
+ .stat{height:52px!important;min-height:52px!important;padding:6px 9px!important}
+ .stat .ico{width:32px!important;height:32px!important;font-size:16px!important}
+ .stat strong{font-size:17px!important}
+ .stat span{font-size:8px!important}
+}
 </style></head><body>
 <header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><div class="who" id="who"><span class="status">● ONLINE</span><span>AWM</span><span class="avatar">W</span></div></header>
 <div class="watermark"><div class="car"></div><div class="awm">AWM</div><div class="wm-sub">DIAGNOSTYKA POJAZDÓW</div></div>
