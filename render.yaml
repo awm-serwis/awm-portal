@@ -2,7 +2,7 @@ services:
   - type: web
     name: przeglad-awm-portal
     runtime: python
-    buildCommand: pip install -r requirements-portal.txt
+    buildCommand: apt-get update && apt-get install -y libreoffice-writer && pip install -r requirements-portal.txt
     startCommand: gunicorn portal_app:app
     envVars:
       - key: AWM_API_KEY
