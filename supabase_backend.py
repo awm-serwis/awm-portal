@@ -74,14 +74,31 @@ def _extract():
             if target!=base and base not in target.parents: raise ValueError("Nieprawidlowy ZIP")
             z.extract(m,root)
     return td,root
+def _pick(m,*keys):
+    for k in keys:
+        v=m.get(k)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    return ""
+
 def _upsert_vehicle(m):
-    pid=str(m.get("id") or m.get("portal_id") or m.get("vin") or "").strip()
+    pid=_pick(m,"id","portal_id","vin","VIN")
     if not pid: raise ValueError("Brak id pojazdu")
-    vals={k:str(m.get(k,"") or "") for k in ("marka","model","rej","vin","przebieg","rok")}
-    vals["rej"]=str(m.get("rej") or m.get("rejestracja") or m.get("nr_rejestracyjny") or "")
-    vals.update({"updated":datetime.now().isoformat(timespec="seconds"),"active":True})
+    vals={
+        "marka":_pick(m,"marka","brand","make"),
+        "model":_pick(m,"model"),
+        "rej":_pick(m,"rej","rejestracja","nr_rejestracyjny","nr_rej","registration","registration_number","plate"),
+        "vin":_pick(m,"vin","VIN"),
+        "przebieg":_pick(m,"przebieg","mileage"),
+        "rok":_pick(m,"rok","year"),
+        "updated":datetime.now().isoformat(timespec="seconds"),
+        "active":True
+    }
     v=_vehicle(pid)
     if v:
+        # Nie kasuj starszych poprawnych danych pustymi polami z częściowej publikacji.
+        vals={k:val for k,val in vals.items() if k in ("updated","active") or val!=" "}
+        vals={k:val for k,val in vals.items() if k in ("updated","active") or bool(val)}
         sb.table("vehicles").update(vals).eq("id",v["id"]).execute(); v=_vehicle(pid)
     else:
         vals["portal_id"]=pid; v=_one(sb.table("vehicles").insert(vals).execute())
@@ -163,12 +180,18 @@ def publish_auto():
     if not api_ok():return jsonify(error="unauthorized"),401
     td=None
     try:
-        td,root=_extract(); m=_meta(root); m["id"]=(request.args.get("id") or m.get("id") or m.get("portal_id") or m.get("vin") or "").strip(); pid,v=_upsert_vehicle(m); _delete_docs(v["id"],["photo","thumb"])
+        td,root=_extract(); m=_meta(root); m["id"]=(request.args.get("id") or m.get("id") or m.get("portal_id") or m.get("vin") or "").strip(); pid,v=_upsert_vehicle(m)
+        photo_sources=[]
         for folder,kind in (("ZDJECIA","photo"),("MINIATURY","thumb")):
             p=root/folder
             if p.exists():
-                for f in p.rglob("*"):
-                    if f.is_file(): _store(v["id"],pid,kind,f)
+                fs=[f for f in p.rglob("*") if f.is_file()]
+                if fs: photo_sources.append((kind,fs))
+        # Podmieniaj zdjęcia tylko wtedy, gdy nowa paczka faktycznie je zawiera.
+        if photo_sources:
+            _delete_docs(v["id"],["photo","thumb"])
+            for kind,fs in photo_sources:
+                for f in fs: _store(v["id"],pid,kind,f)
         return jsonify(ok=True,id=pid)
     except Exception as ex:return jsonify(error=str(ex)),400
     finally:
