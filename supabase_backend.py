@@ -78,6 +78,7 @@ def _upsert_vehicle(m):
     pid=str(m.get("id") or m.get("portal_id") or m.get("vin") or "").strip()
     if not pid: raise ValueError("Brak id pojazdu")
     vals={k:str(m.get(k,"") or "") for k in ("marka","model","rej","vin","przebieg","rok")}
+    vals["rej"]=str(m.get("rej") or m.get("rejestracja") or m.get("nr_rejestracyjny") or "")
     vals.update({"updated":datetime.now().isoformat(timespec="seconds"),"active":True})
     v=_vehicle(pid)
     if v:
