@@ -172,8 +172,10 @@ def _zip_request_to_temp(prefix):
         z.extractall(td/'x')
     return td
 
-@app.post('/api/publish-auto')
+@app.route('/api/publish-auto', methods=['GET','HEAD','OPTIONS','POST'])
 def publish_auto():
+    if request.method != 'POST':
+        return jsonify(ok=True, publish=True, endpoint='/api/publish-auto')
     if not api_ok(): return jsonify(error='bad key'),403
     pid=(request.args.get('id') or '').strip()
     if not pid: return jsonify(error='missing id'),400
@@ -215,8 +217,10 @@ def publish_auto():
     finally:
         if td: shutil.rmtree(td,ignore_errors=True)
 
-@app.post('/api/publish-docs')
+@app.route('/api/publish-docs', methods=['GET','HEAD','OPTIONS','POST'])
 def publish_docs():
+    if request.method != 'POST':
+        return jsonify(ok=True, publish=True, endpoint='/api/publish-docs')
     if not api_ok(): return jsonify(error='bad key'),403
     pid=(request.args.get('id') or '').strip()
     if not pid: return jsonify(error='missing id'),400
@@ -248,8 +252,10 @@ def publish_docs():
     finally:
         if td: shutil.rmtree(td,ignore_errors=True)
 
-@app.post('/api/publish')
+@app.route('/api/publish', methods=['GET','HEAD','OPTIONS','POST'])
 def publish():
+    if request.method != 'POST':
+        return jsonify(ok=True, publish=True, endpoint='/api/publish')
     if not api_ok(): return jsonify(error='bad key'),403
     pid=(request.args.get('id') or '').strip()
     if not pid: return jsonify(error='missing id'),400
