@@ -66,7 +66,7 @@ async function logout(){await fetch('/api/logout',{method:'POST'});location.relo
 async function load(){let[r,x]=await j('/api/vehicles');V=Array.isArray(x)?x:[];$('sc').textContent=V.length;$('sd').textContent=V.filter(v=>v.docs.some(d=>d.kind==='raport')).length;$('sa').textContent=V.filter(v=>v.docs.some(d=>d.kind==='wycena_ai')).length;$('sp').textContent=V.reduce((n,v)=>n+(v.photos||[]).length,0);render()}
 function e(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>{let d=v.docs.find(d=>d.kind===k);return d?`<button class="a ${k==='wycena'?'green':k==='raport'?'dark':k==='wycena_ai'?'gold':''}" onclick="openDoc(${d.id},'${e(d.name||k)}')">${k==='opis'?'▤<br>PODGLĄD<br>OPISU':k==='wycena'?'$<br>PODGLĄD<br>WYCENY':k==='raport'?'🔧<br>PODGLĄD<br>RAPORTU DIAG':'🤖<br>WYCENA AI'}</button>`:''};let pc=(v.photos||[]).length;return `<div class="row"><div class="picwrap">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}${pc?`<span class="photocount">▧ ${pc}</span>`:''}</div><div><div class="vtitle"><b>${e(v.marka)} ${e(v.model)}</b><span class="badge">↗ UDOSTĘPNIONY</span></div><div class="details"><div><div class="label">Rok</div><div class="val">${e(v.rok||'—')}</div></div><div><div class="label">Rejestracja</div><div class="val">${e(v.rej||'—')}</div></div><div><div class="label">VIN</div><div class="val">${e(v.vin||'—')}</div></div><div><div class="label">Przebieg</div><div class="val">${e(v.przebieg||'—')} km</div></div></div><div class="tags"><span class="tag">SAMOCHÓD OSOBOWY</span><span class="tag">AWM</span></div></div><div class="actions">${b('opis')}${b('wycena')}${b('raport')}${b('wycena_ai')}</div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
-function openDoc(id,name){let url='/file/'+id;document.getElementById('docTitle').textContent=name||'Podgląd dokumentu';document.getElementById('docDownload').href=url+'?download=1';document.getElementById('docFrame').src=url;document.getElementById('docModal').classList.add('on')}function closeDoc(){document.getElementById('docModal').classList.remove('on');document.getElementById('docFrame').src='about:blank'}
+async function openDoc(id,name){let url='/file/'+id;document.getElementById('docTitle').textContent=name||'Podgląd dokumentu';document.getElementById('docDownload').href=url+'?download=1';let frame=document.getElementById('docFrame');let low=String(name||'').toLowerCase();frame.src=(low.endsWith('.pdf')||low.match(/\.(png|jpg|jpeg|webp|gif)$/))?url:'/preview/'+id;document.getElementById('docModal').classList.add('on')}function closeDoc(){document.getElementById('docModal').classList.remove('on');document.getElementById('docFrame').src='about:blank'}
 let PV=[],PI=0;function openPic(id){let v=V.find(x=>String(x.id)===String(id));PV=(v&&v.photos)||[];if(!PV.length&&v&&v.photo)PV=[v.photo];PI=0;if(PV.length){$('bigpic').src='/file/'+PV[0];$('modal').classList.add('on')}}function stepPic(n,ev){if(ev)ev.stopPropagation();if(!PV.length)return;PI=(PI+n+PV.length)%PV.length;$('bigpic').src='/file/'+PV[PI]}function closePic(ev){if(ev&&ev.target&&ev.target.id==='bigpic')return;$('modal').classList.remove('on');$('bigpic').src=''}document.addEventListener('keydown',e=>{if(!$('modal').classList.contains('on'))return;if(e.key==='Escape')closePic();if(e.key==='ArrowLeft')stepPic(-1);if(e.key==='ArrowRight')stepPic(1)});$('q').oninput=render;boot();
 </script></body></html>'''
 
@@ -96,6 +96,19 @@ def vehicles():
             clean.append(d)
         ds=clean; x['docs']=ds; x['photos']=[d['id'] for d in ds if d['kind']=='photo']; x['photo']=next((d['id'] for d in ds if d['kind']=='thumb'),None) or next(iter(x['photos']),None); out.append(x)
     c.close(); return jsonify(out)
+@app.get('/preview/<int:i>')
+def preview(i):
+    if not session.get('user'): return jsonify(error='login'),401
+    c=db(); r=c.execute('select * from docs where id=?',(i,)).fetchone(); c.close()
+    if not r or not Path(r['path']).is_file(): return jsonify(error='404'),404
+    ext=Path(r['name']).suffix.lower()
+    if ext in ('.pdf','.png','.jpg','.jpeg','.webp','.gif'):
+        return send_file(r['path'],as_attachment=False,download_name=r['name'])
+    # Browsers do not render DOC/DOCX/XLS/XLSX directly. Show a useful in-portal notice instead of triggering download.
+    from markupsafe import escape
+    n=escape(r['name'])
+    return Response(f'''<!doctype html><meta charset="utf-8"><style>body{{font-family:Segoe UI,Arial;background:#f3f5f4;color:#17352a;display:grid;place-items:center;height:90vh;margin:0}}.b{{background:white;border:1px solid #dce7e2;border-radius:14px;padding:28px;max-width:650px;text-align:center;box-shadow:0 8px 28px #0001}}h2{{margin-top:0}}p{{line-height:1.5}}</style><div class="b"><h2>{n}</h2><p>Ten dokument nie jest plikiem PDF, dlatego przeglądarka nie może pokazać go bezpośrednio.</p><p>Do podglądu na portalu potrzebna jest wersja PDF. Plik można nadal pobrać przyciskiem <b>Pobierz</b> u góry.</p></div>''',mimetype='text/html')
+
 @app.get('/file/<int:i>')
 def file(i):
     if not session.get('user'): return jsonify(error='login'),401
