@@ -93,8 +93,8 @@ def login():
     if request.method=="GET": return __import__("flask").redirect("/")
     d=request.get_json(silent=True) or {}
     u=_one(sb.table("users").select("*").eq("login",d.get("login","")).limit(1).execute())
-    if not u or not okp(d.get("pass",""),u["pass"]): return jsonify(error="Bledny login lub haslo"),401
-    session["user"]=u["login"]; session["role"]=u.get("role","admin"); return jsonify(ok=True)
+    if not u or not okp(d.get("password",d.get("pass","")),u["pass"]): return jsonify(error="Bledny login lub haslo"),401
+    session["user"]={"id":u["id"],"login":u["login"],"role":u.get("role","admin")}; session["role"]=u.get("role","admin"); return jsonify(ok=True)
 def vehicles():
     if "user" not in session: return jsonify(error="auth"),401
     vs=_rows(sb.table("vehicles").select("*").eq("active",True).order("updated",desc=True).execute())
