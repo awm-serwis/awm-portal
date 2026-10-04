@@ -1,4 +1,5 @@
 import os, json, secrets, hashlib, hmac, zipfile, tempfile, shutil, mimetypes
+import shutil
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -204,8 +205,11 @@ def add_document(pid,kind):
         if kind=="opis" and f.suffix.lower()==".docx":
             out=td/"pdf"; out.mkdir(exist_ok=True)
             try:
-                r=subprocess.run(["libreoffice","--headless","--convert-to","pdf","--outdir",str(out),str(f)],
-                                 stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
+                office=shutil.which("libreoffice") or shutil.which("soffice") or "/usr/bin/libreoffice"
+                profile=td/"lo_profile"; profile.mkdir(exist_ok=True)
+                env=os.environ.copy(); env["HOME"]=str(td)
+                r=subprocess.run([office,"-env:UserInstallation=file://"+str(profile),"--headless","--convert-to","pdf","--outdir",str(out),str(f)],
+                                 stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120,env=env)
                 made=out/(f.stem+".pdf")
                 if r.returncode!=0 or not made.is_file() or made.stat().st_size<1000:
                     msg=(r.stderr or r.stdout or b"").decode(errors="ignore")[-600:]
