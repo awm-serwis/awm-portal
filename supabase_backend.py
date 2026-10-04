@@ -103,7 +103,7 @@ def vehicles():
         ds=_rows(sb.table("docs").select("id,kind,name").eq("vehicle_id",v["id"]).order("id",desc=True).execute())
         allowed={"photo":True,"thumb":True,"opis":v.get("show_opis",True),"wycena":v.get("show_wycena",True),"raport":v.get("show_raport",True),"wycena_ai":v.get("show_wycena_ai",True)}
         ds=[d for d in ds if allowed.get(d["kind"],False)]
-        x=dict(v); x["docs"]=ds; x["photos"]=[d for d in ds if d["kind"]=="photo"]; x["photo"]=next((d for d in ds if d["kind"] in ("thumb","photo")),None); out.append(x)
+        x=dict(v); x["docs"]=ds; x["photos"]=[d["id"] for d in ds if d["kind"]=="photo"]; x["photo"]=next((d["id"] for d in ds if d["kind"]=="thumb"),None) or next(iter(x["photos"]),None); out.append(x)
     return jsonify(out)
 def file_route(i):
     if "user" not in session: return __import__("flask").redirect("/")
