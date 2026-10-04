@@ -2,7 +2,7 @@ import os, json, secrets, hashlib, hmac, zipfile, tempfile, shutil, mimetypes
 from pathlib import Path
 from datetime import datetime
 from io import BytesIO
-from flask import request, jsonify, session, send_file
+from flask import request, jsonify, session, send_file, Response
 from supabase import create_client
 from werkzeug.utils import secure_filename
 
@@ -123,12 +123,39 @@ def vehicles():
         ds=[d for d in ds if allowed.get(d["kind"],False)]
         x=dict(v); x["docs"]=ds; x["photos"]=[d["id"] for d in ds if d["kind"]=="photo"]; x["photo"]=next((d["id"] for d in ds if d["kind"]=="thumb"),None) or next(iter(x["photos"]),None); out.append(x)
     return jsonify(out)
+def preview(i):
+    if "user" not in session: return __import__("flask").redirect("/")
+    d=_one(sb.table("docs").select("*").eq("id",i).limit(1).execute())
+    if not d: return Response("Brak dokumentu",status=404,mimetype="text/plain")
+    try:
+        data=sb.storage.from_(BUCKET).download(d["path"])
+    except Exception:
+        return Response("Nie znaleziono pliku dokumentu w magazynie.",status=404,mimetype="text/plain")
+    name=d.get("name") or "dokument"; ext=Path(name).suffix.lower()
+    if ext in (".pdf",".png",".jpg",".jpeg",".webp",".gif"):
+        return send_file(BytesIO(data),download_name=name,mimetype=mimetypes.guess_type(name)[0] or "application/octet-stream",as_attachment=False)
+    if ext==".docx":
+        try:
+            import re, html as _html
+            from markupsafe import escape
+            with zipfile.ZipFile(BytesIO(data)) as z:
+                xml=z.read("word/document.xml").decode("utf-8","ignore")
+            # Preserve paragraphs, table cells and line breaks for a readable browser preview.
+            xml=xml.replace("</w:tc>","\t").replace("</w:tr>","\n").replace("</w:p>","\n").replace("<w:br/>","\n")
+            txt=re.sub(r"<[^>]+>","",xml); txt=_html.unescape(txt)
+            lines=[str(escape(x.strip())) for x in txt.splitlines() if x.strip()]
+            body="<br>".join(lines)
+            return Response(f'''<!doctype html><html lang="pl"><head><meta charset="utf-8"><style>body{{margin:0;background:#e9eeeb;font:15px Segoe UI,Arial;color:#17231e;padding:28px}}.page{{box-sizing:border-box;background:#fff;max-width:900px;min-height:1100px;margin:auto;padding:60px 70px;box-shadow:0 4px 22px #0002;line-height:1.55}}@media(max-width:700px){{body{{padding:8px}}.page{{padding:25px}}}}</style></head><body><div class="page">{body}</div></body></html>''',mimetype="text/html")
+        except Exception as ex:
+            return Response("Nie udało się odczytać dokumentu DOCX: "+str(ex),status=422,mimetype="text/plain")
+    return Response("Ten format nie ma podglądu w przeglądarce.",mimetype="text/plain")
+
 def file_route(i):
     if "user" not in session: return __import__("flask").redirect("/")
     d=_one(sb.table("docs").select("*").eq("id",i).limit(1).execute())
     if not d: return ("Brak pliku",404)
     data=sb.storage.from_(BUCKET).download(d["path"])
-    return send_file(BytesIO(data),download_name=d["name"],mimetype=mimetypes.guess_type(d["name"])[0] or "application/octet-stream")
+    return send_file(BytesIO(data),download_name=d["name"],mimetype=mimetypes.guess_type(d["name"])[0] or "application/octet-stream",as_attachment=request.args.get("download")=="1")
 def admin_access():
     if not api_ok(): return jsonify(error="bad key"),403
     users=_rows(sb.table("users").select("*").order("id").execute())
@@ -230,6 +257,6 @@ def publish():
 
 def install_supabase(app):
     _init_admin()
-    repl={"login":login,"vehicles":vehicles,"file":file_route,"admin_access":admin_access,"admin_vehicles":admin_vehicles,"visibility":visibility,"add_document":add_document,"expire":expire,"publish_auto":publish_auto,"publish_docs":publish_docs,"publish":publish}
+    repl={"login":login,"vehicles":vehicles,"file":file_route,"preview":preview,"admin_access":admin_access,"admin_vehicles":admin_vehicles,"visibility":visibility,"add_document":add_document,"expire":expire,"publish_auto":publish_auto,"publish_docs":publish_docs,"publish":publish}
     for endpoint,fn in repl.items():
         if endpoint in app.view_functions: app.view_functions[endpoint]=fn
