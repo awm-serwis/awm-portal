@@ -96,25 +96,51 @@ def vehicles():
             clean.append(d)
         ds=clean; x['docs']=ds; x['photos']=[d['id'] for d in ds if d['kind']=='photo']; x['photo']=next((d['id'] for d in ds if d['kind']=='thumb'),None) or next(iter(x['photos']),None); out.append(x)
     c.close(); return jsonify(out)
+def _doc_path(r):
+    p=Path(r['path']) if r and r['path'] else None
+    if p and p.is_file(): return p
+    # Recover older DB records after storage/path changes by locating the saved copy in this vehicle directory.
+    if r:
+        d=FILES/str(r['vehicle_id'])
+        if d.is_dir():
+            exact=[x for x in d.iterdir() if x.is_file() and (x.name==r['name'] or x.name.endswith('_'+safe(r['name'])))]
+            if exact: return max(exact,key=lambda x:x.stat().st_mtime)
+    return None
+
 @app.get('/preview/<int:i>')
 def preview(i):
     if not session.get('user'): return jsonify(error='login'),401
     c=db(); r=c.execute('select * from docs where id=?',(i,)).fetchone(); c.close()
-    if not r or not Path(r['path']).is_file(): return jsonify(error='404'),404
-    ext=Path(r['name']).suffix.lower()
+    p=_doc_path(r)
+    if not r or not p: return Response('<!doctype html><meta charset="utf-8"><div style="font:16px Segoe UI;padding:30px">Nie znaleziono pliku dokumentu na serwerze. Wyślij dokument ponownie z programu AWM.</div>',status=404,mimetype='text/html')
+    ext=p.suffix.lower()
     if ext in ('.pdf','.png','.jpg','.jpeg','.webp','.gif'):
-        return send_file(r['path'],as_attachment=False,download_name=r['name'])
-    # Browsers do not render DOC/DOCX/XLS/XLSX directly. Show a useful in-portal notice instead of triggering download.
+        return send_file(p,as_attachment=False,download_name=r['name'])
+    if ext=='.docx':
+        try:
+            from markupsafe import escape
+            with zipfile.ZipFile(p) as z:
+                xml=z.read('word/document.xml').decode('utf-8','ignore')
+            import re
+            xml=xml.replace('</w:p>','\\n').replace('</w:tr>','\\n')
+            txt=re.sub(r'<[^>]+>','',xml)
+            import html as _html
+            txt=_html.unescape(txt)
+            body='<br>'.join(str(escape(x)) for x in txt.splitlines() if x.strip())
+            return Response(f'''<!doctype html><meta charset="utf-8"><style>body{{font-family:Segoe UI,Arial;background:#eef2f0;margin:0;padding:24px;color:#18251f}}.page{{background:white;max-width:900px;min-height:1000px;margin:auto;padding:55px 65px;box-shadow:0 3px 18px #0002;line-height:1.55}}</style><div class="page">{body}</div>''',mimetype='text/html')
+        except Exception:
+            pass
     from markupsafe import escape
     n=escape(r['name'])
-    return Response(f'''<!doctype html><meta charset="utf-8"><style>body{{font-family:Segoe UI,Arial;background:#f3f5f4;color:#17352a;display:grid;place-items:center;height:90vh;margin:0}}.b{{background:white;border:1px solid #dce7e2;border-radius:14px;padding:28px;max-width:650px;text-align:center;box-shadow:0 8px 28px #0001}}h2{{margin-top:0}}p{{line-height:1.5}}</style><div class="b"><h2>{n}</h2><p>Ten dokument nie jest plikiem PDF, dlatego przeglądarka nie może pokazać go bezpośrednio.</p><p>Do podglądu na portalu potrzebna jest wersja PDF. Plik można nadal pobrać przyciskiem <b>Pobierz</b> u góry.</p></div>''',mimetype='text/html')
+    return Response(f'''<!doctype html><meta charset="utf-8"><style>body{{font-family:Segoe UI,Arial;background:#f3f5f4;display:grid;place-items:center;height:90vh}}.b{{background:white;padding:28px;border-radius:14px}}</style><div class="b"><h2>{n}</h2><p>Podgląd tego formatu nie jest dostępny. Użyj przycisku Pobierz.</p></div>''',mimetype='text/html')
 
 @app.get('/file/<int:i>')
 def file(i):
     if not session.get('user'): return jsonify(error='login'),401
     c=db(); r=c.execute('select * from docs where id=?',(i,)).fetchone(); c.close()
-    if not r or not Path(r['path']).is_file(): return jsonify(error='404'),404
-    return send_file(r['path'], as_attachment=request.args.get('download')=='1', download_name=r['name'])
+    p=_doc_path(r)
+    if not r or not p: return jsonify(error='404'),404
+    return send_file(p, as_attachment=request.args.get('download')=='1', download_name=r['name'])
 
 @app.route('/api/admin/access', methods=['GET','POST'])
 def admin_access():
