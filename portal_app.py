@@ -281,6 +281,11 @@ def publish():
     except Exception as ex: return jsonify(error=str(ex)),400
     finally: shutil.rmtree(td,ignore_errors=True)
 
+# Persistent Supabase backend (enabled only when configured on the host)
+if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SECRET_KEY'):
+    from supabase_backend import install_supabase
+    install_supabase(app)
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '10000'))
     app.run(host='0.0.0.0', port=port, debug=False)
