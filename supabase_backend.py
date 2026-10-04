@@ -27,7 +27,15 @@ def api_ok():
 def _rows(resp): return resp.data or []
 def _one(resp):
     x=_rows(resp); return x[0] if x else None
-def _vehicle(pid): return _one(sb.table("vehicles").select("*").eq("portal_id",pid).limit(1).execute())
+def _vehicle(pid):
+    # Desktop AWM can address a vehicle by database id (e.g. /vehicles/1/...)
+    # while publish endpoints use portal_id. Accept both for full compatibility.
+    v=_one(sb.table("vehicles").select("*").eq("portal_id",str(pid)).limit(1).execute())
+    if v: return v
+    try:
+        return _one(sb.table("vehicles").select("*").eq("id",int(pid)).limit(1).execute())
+    except (TypeError,ValueError):
+        return None
 def _safe(x): return secure_filename(str(x or "")) or "file"
 def _init_admin():
     if not _one(sb.table("users").select("id").eq("login",ADMIN_USER).limit(1).execute()):
