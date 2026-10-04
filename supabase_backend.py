@@ -104,10 +104,10 @@ def file_route(i):
     data=sb.storage.from_(BUCKET).download(d["path"])
     return send_file(BytesIO(data),download_name=d["name"],mimetype=mimetypes.guess_type(d["name"])[0] or "application/octet-stream")
 def admin_access():
-    if "user" not in session: return jsonify(error="auth"),401
+    if not api_ok(): return jsonify(error="bad key"),403
     users=_rows(sb.table("users").select("*").order("id").execute())
     if request.method=="GET": return jsonify(login=(users[0]["login"] if users else ADMIN_USER))
-    d=request.get_json(silent=True) or {}; login=str(d.get("login","")).strip(); pw=str(d.get("pass",""))
+    d=request.get_json(silent=True) or {}; login=str(d.get("login","")).strip(); pw=str(d.get("password",""))
     if not login or not pw: return jsonify(error="Brak loginu lub hasla"),400
     if users:
         sb.table("users").update({"login":login,"pass":ph(pw),"role":"admin"}).eq("id",users[0]["id"]).execute()
@@ -115,13 +115,18 @@ def admin_access():
     else: sb.table("users").insert({"login":login,"pass":ph(pw),"role":"admin"}).execute()
     session["user"]=login; return jsonify(ok=True)
 def admin_vehicles():
-    if "user" not in session: return jsonify(error="auth"),401
+    if not api_ok(): return jsonify(error="bad key"),403
     vs=_rows(sb.table("vehicles").select("*").order("updated",desc=True).execute())
     for v in vs:
         v["docs"]=_rows(sb.table("docs").select("id,kind,name").eq("vehicle_id",v["id"]).order("id",desc=True).execute())
-    return jsonify(vs)
+    out=[]
+    for v in vs:
+        kinds={d["kind"] for d in v["docs"]}
+        x=dict(v); x.update(has_opis="opis" in kinds,has_wycena="wycena" in kinds,has_raport="raport" in kinds,has_wycena_ai="wycena_ai" in kinds)
+        out.append(x)
+    return jsonify(vehicles=out)
 def visibility(pid):
-    if "user" not in session: return jsonify(error="auth"),401
+    if not api_ok(): return jsonify(error="bad key"),403
     v=_vehicle(pid)
     if not v:return jsonify(error="not found"),404
     d=request.get_json(silent=True) or {}; allowed={"opis":"show_opis","wycena":"show_wycena","raport":"show_raport","wycena_ai":"show_wycena_ai"}
@@ -129,11 +134,11 @@ def visibility(pid):
     if vals: sb.table("vehicles").update(vals).eq("id",v["id"]).execute()
     return jsonify(ok=True)
 def add_document(pid,kind):
-    if "user" not in session:return jsonify(error="auth"),401
+    if not api_ok():return jsonify(error="bad key"),403
     if kind not in ("opis","wycena","raport","wycena_ai"):return jsonify(error="kind"),400
     v=_vehicle(pid)
     if not v:return jsonify(error="not found"),404
-    name=Path(request.headers.get("X-Filename",kind+".pdf")).name
+    name=Path(request.args.get("name") or request.headers.get("X-Filename",kind+".pdf")).name
     td=Path(tempfile.mkdtemp()); f=td/name
     try:
         f.write_bytes(request.get_data()); _delete_docs(v["id"],[kind]); _store(v["id"],pid,kind,f)
@@ -141,7 +146,7 @@ def add_document(pid,kind):
         return jsonify(ok=True)
     finally: shutil.rmtree(td,ignore_errors=True)
 def expire(pid):
-    if "user" not in session:return jsonify(error="auth"),401
+    if not api_ok():return jsonify(error="bad key"),403
     v=_vehicle(pid)
     if not v:return jsonify(ok=True)
     _delete_docs(v["id"]); sb.table("vehicles").delete().eq("id",v["id"]).execute(); return jsonify(ok=True)
