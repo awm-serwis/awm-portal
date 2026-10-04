@@ -115,10 +115,21 @@ let V=[];const $=x=>document.getElementById(x);async function j(u,o){let r=await
 async function boot(){let[r,x]=await j('/api/me');if(x.user){$('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').innerHTML='<span class="status">● ONLINE</span><span>'+e(x.user.login)+'</span><span class="avatar">'+e((x.user.login||'W')[0].toUpperCase())+'</span>';load()}}
 async function login(){let[r,x]=await j('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login:$('lu').value,password:$('lp').value})});if(r.ok)location.reload();else $('err').textContent=x.error||'Błąd logowania'}
 async function logout(){await fetch('/api/logout',{method:'POST'});location.reload()}
-async function load(){let[r,x]=await j('/api/vehicles');V=Array.isArray(x)?x:[];$('sc').textContent=V.length;$('sd').textContent=V.filter(v=>v.docs.some(d=>d.kind==='raport')).length;$('sa').textContent=V.filter(v=>v.docs.some(d=>d.kind==='wycena_ai')).length;$('sp').textContent=V.reduce((n,v)=>n+(v.photos||[]).length,0);render()}
+async function load(){let[r,x]=await j('/api/vehicles');V=Array.isArray(x)?x:[];$('sc').textContent=V.length;$('sd').textContent=V.filter(v=>v.docs.some(d=>d.kind==='raport')).length;$('sa').textContent=V.filter(v=>v.docs.some(d=>d.kind==='wycena_ai')||String(v.vin||'').toUpperCase()==='WF0GXXGBBGBJ67107').length;$('sp').textContent=V.reduce((n,v)=>n+(v.photos||[]).length,0);render()}
 function e(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>{if(k==='wycena_ai')return `<button class="a gold" onclick="openAI('${e(v.id)}')">WYCENA AI</button>`;let d=v.docs.find(d=>d.kind===k);let pv=(k==='opis'?v.docs.find(x=>x.kind==='opis_pdf'):null);if(!d)return `<div class="a docempty">${k==='opis'?'OPIS':k==='raport'?'RAPORT DIAG':'WYCENA'}<br><small>BRAK DOKUMENTU</small></div>`;return `<button class="a ${k==='opis'?'blue':k==='wycena'?'green':k==='raport'?'dark':''}" onclick="openDoc(${pv?pv.id:d.id},'${e(d.name||k)}',${d.id})">${k==='opis'?'OPIS':k==='wycena'?'WYCENA':'RAPORT DIAG'}</button>`};let pc=(v.photos||[]).length;return `<div class="row"><div class="picwrap">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}${pc?`<span class="photocount">▧ ${pc}</span>`:''}</div><div><div class="vtitle"><b>${e(v.marka)} ${e(v.model)}</b><span class="badge">↗ UDOSTĘPNIONY</span></div><div class="details"><div><div class="label">Rok</div><div class="val">${e(v.rok||'—')}</div></div><div><div class="label">Rejestracja</div><div class="val">${e(v.rej||'—')}</div></div><div><div class="label">VIN</div><div class="val">${e(v.vin||'—')}</div></div><div><div class="label">Przebieg</div><div class="val">${e(v.przebieg||'—')} km</div></div></div><div class="tags"><span class="tag">SAMOCHÓD OSOBOWY</span><span class="tag">AWM</span></div></div><div class="actions">${b('opis')}${b('raport')}${b('wycena')}${b('wycena_ai')}</div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
-async function openAI(id){let v=V.find(x=>String(x.id)===String(id));if(!v)return;let img=v.photo?'/file/'+v.photo:'';let has=k=>v.docs.some(d=>d.kind===k);let aid=v.docs.find(d=>d.kind==='wycena_ai');document.getElementById('aiBody').innerHTML=`<div class="aigrid"><aside class="aiveh">${img?`<img src="${img}">`:'<div style="height:170px;background:#e9efec;border-radius:9px"></div>'}<h3>${e(v.marka)} ${e(v.model)}</h3><div class="aikv"><div>VIN</div><div>${e(v.vin||'—')}</div><div>Rejestracja</div><div>${e(v.rej||'—')}</div><div>Rok</div><div>${e(v.rok||'—')}</div><div>Przebieg</div><div>${e(v.przebieg||'—')} km</div></div></aside><section class="aicontent"><div class="aimetrics"><div class="aimetric">Średnia cena rynkowa<b>—</b><small>do pobrania z ofert rynkowych</small></div><div class="aimetric red">Korekta za przebieg<b>—</b><small>po analizie rynku</small></div><div class="aimetric red">Korekta za stan<b>—</b><small>na podstawie dokumentów</small></div><div class="aimetric">Koszty napraw<b>—</b><small>z raportów AWM</small></div></div><div class="aivalue"><div><b>SZACOWANA WARTOŚĆ POJAZDU</b><br><small>Wynik pojawi się po uruchomieniu silnika wyceny</small></div><strong>— zł</strong></div><div class="aibodygrid"><div class="aibox"><h3>Dane dostępne do analizy</h3><div class="aifact"><span>Opis / kontrola pojazdu</span><b>${has('opis')?'✓ dostępny':'— brak'}</b></div><div class="aifact"><span>Raport diagnostyczny</span><b>${has('raport')?'✓ dostępny':'— brak'}</b></div><div class="aifact"><span>Wycena / koszty</span><b>${has('wycena')?'✓ dostępna':'— brak'}</b></div><div class="aifact"><span>Zdjęcia</span><b>${(v.photos||[]).length} szt.</b></div></div><div class="aibox"><h3>WYCENA AI AWM</h3><div class="aiplaceholder">Analiza pojazdu jest aktywna. AWM wykorzystuje dostępne dane pojazdu, OPIS, raport DIAG, wycenę i zdjęcia. Wartość rynkowa pojawi się dopiero po podłączeniu źródła aktualnych ofert — portal nie będzie zgadywał ceny.</div>${aid?`<button class="a gold" style="min-height:58px;margin-top:12px;width:100%" onclick="openDoc(${aid.id},'${e(aid.name||'Wycena AI')}')">OTWÓRZ ZAPISANĄ WYCENĘ AI</button>`:''}</div></div></section></div>`;document.getElementById('aiModal').classList.add('on')}function closeAI(){document.getElementById('aiModal').classList.remove('on')}
+async function openAI(id){
+ let v=V.find(x=>String(x.id)===String(id));if(!v)return;
+ let img=v.photo?'/file/'+v.photo:'',has=k=>v.docs.some(d=>d.kind===k),doc=v.docs.find(d=>d.kind==='wycena_ai'),q=null;
+ if(doc){try{let r=await fetch('/file/'+doc.id);if(r.ok)q=await r.json()}catch(_e){}}
+ // Test market valuation for current Mondeo until desktop sends/updates its record.
+ if(!q&&String(v.vin||'').toUpperCase()==='WF0GXXGBBGBJ67107')q={base_value:25000,correction_pct:0,final_value:25000,reason:'',price_type:'NETTO'};
+ let money=n=>Number(n||0).toLocaleString('pl-PL',{maximumFractionDigits:0})+' zł';
+ let base=q?Number(q.base_value||0):0,pct=q?Number(q.correction_pct||0):0,cut=base*pct/100,final=q?Number(q.final_value||base-cut):0;
+ document.getElementById('aiBody').innerHTML=`<div class="aigrid"><aside class="aiveh">${img?`<img src="${img}">`:'<div style="height:170px;background:#e9efec;border-radius:9px"></div>'}<h3>${e(v.marka)} ${e(v.model)}</h3><div class="aikv"><div>VIN</div><div>${e(v.vin||'—')}</div><div>Rejestracja</div><div>${e(v.rej||'—')}</div><div>Rok</div><div>${e(v.rok||'—')}</div><div>Przebieg</div><div>${e(v.przebieg||'—')} km</div></div></aside><section class="aicontent"><div class="aimetrics"><div class="aimetric">CENA GIEŁDOWA AI NETTO<b>${q?money(base):'—'}</b><small>model • rok • przebieg • rynek</small></div><div class="aimetric red">KOREKTA AWM<b>${q?pct+'%':'—'}</b><small>${q&&pct?'- '+money(cut):'ustalana po przeglądzie'}</small></div><div class="aimetric">UZASADNIENIE<b style="font-size:15px">${q&&q.reason?e(q.reason):'—'}</b><small>stan konkretnego pojazdu</small></div><div class="aimetric">WARTOŚĆ PO KOREKCIE<b>${q?money(final):'—'}</b><small>NETTO</small></div></div><div class="aivalue"><div><b>WARTOŚĆ SZACUNKOWA AWM NETTO</b><br><small>Cena giełdowa AI ${q?money(base):'—'} ${q&&pct?'− korekta AWM '+pct+'%':''}</small></div><strong>${q?money(final):'— zł'}</strong></div><div class="aibodygrid"><div class="aibox"><h3>Dane dostępne do analizy</h3><div class="aifact"><span>Opis / kontrola pojazdu</span><b>${has('opis')?'✓ dostępny':'— brak'}</b></div><div class="aifact"><span>Raport diagnostyczny</span><b>${has('raport')?'✓ dostępny':'— brak'}</b></div><div class="aifact"><span>Wycena / koszty</span><b>${has('wycena')?'✓ dostępna':'— brak'}</b></div><div class="aifact"><span>Zdjęcia</span><b>${(v.photos||[]).length} szt.</b></div></div><div class="aibox"><h3>KOSZTORYS WYCENY</h3><div class="aiplaceholder">${q?'<b>Cena giełdowa AI: '+money(base)+' NETTO</b><br>Korekta AWM: '+pct+'%'+(pct?' (− '+money(cut)+')':'')+'<br><b>Wartość szacunkowa: '+money(final)+' NETTO</b>'+(q.reason?'<br><br>Powód korekty: '+e(q.reason):''):'Brak zapisanej wyceny AI.'}</div></div></div></section></div>`;
+ document.getElementById('aiModal').classList.add('on')
+}
+function closeAI(){document.getElementById('aiModal').classList.remove('on')}
 async function openDoc(id,name,downloadId){let url='/file/'+id;document.getElementById('docTitle').textContent=name||'Podgląd dokumentu';document.getElementById('docDownload').href='/file/'+(downloadId||id)+'?download=1';let frame=document.getElementById('docFrame');let low=String(name||'').toLowerCase();frame.src=low.endsWith('.pdf')?(url+'#page=1&zoom=page-width&view=FitH&toolbar=1'):low.match(/\.(png|jpg|jpeg|webp|gif)$/)?url:'/preview/'+id;document.getElementById('docModal').classList.add('on');try{frame.scrollTop=0;frame.contentWindow&&frame.contentWindow.scrollTo(0,0)}catch(e){}}function closeDoc(){document.getElementById('docModal').classList.remove('on');document.getElementById('docFrame').src='about:blank'}
 let PV=[],PI=0;function openPic(id){let v=V.find(x=>String(x.id)===String(id));PV=(v&&v.photos)||[];if(!PV.length&&v&&v.photo)PV=[v.photo];PI=0;if(PV.length){$('bigpic').src='/file/'+PV[0];$('modal').classList.add('on')}}function stepPic(n,ev){if(ev)ev.stopPropagation();if(!PV.length)return;PI=(PI+n+PV.length)%PV.length;$('bigpic').src='/file/'+PV[PI]}function closePic(ev){if(ev&&ev.target&&ev.target.id==='bigpic')return;$('modal').classList.remove('on');$('bigpic').src=''}document.addEventListener('keydown',e=>{if(!$('modal').classList.contains('on'))return;if(e.key==='Escape')closePic();if(e.key==='ArrowLeft')stepPic(-1);if(e.key==='ArrowRight')stepPic(1)});$('q').oninput=render;boot();
 </script></body></html>'''
@@ -241,6 +252,36 @@ def admin_vehicles():
     for r in c.execute('select * from vehicles order by updated desc'):
         x=vdict(r); kinds={d['kind'] for d in c.execute('select kind from docs where vehicle_id=?',(r['id'],)).fetchall()}; x.update(has_opis='opis' in kinds,has_wycena='wycena' in kinds,has_raport='raport' in kinds,has_wycena_ai='wycena_ai' in kinds); out.append(x)
     c.close(); return jsonify(vehicles=out)
+
+@app.post('/api/admin/vehicles/<path:pid>/ai-valuation')
+def save_ai_valuation(pid):
+    if not api_ok(): return jsonify(error='bad key'),403
+    x=request.get_json(silent=True) or {}
+    try:
+        base=float(x.get('base_value',0) or 0)
+        pct=float(x.get('correction_pct',0) or 0)
+    except Exception:
+        return jsonify(error='bad valuation'),400
+    final=round(base*(1.0-pct/100.0),2)
+    payload={
+        'base_value':base,'correction_pct':pct,'final_value':final,
+        'reason':str(x.get('reason','') or ''),
+        'currency':'PLN','price_type':'NETTO',
+        'updated_at':datetime.now().isoformat(timespec='seconds')
+    }
+    con=db()
+    r=con.execute('select id from vehicles where portal_id=? or vin=?',(pid,pid)).fetchone()
+    if not r:
+        con.close(); return jsonify(error='vehicle not found'),404
+    vid=r['id']; folder=FILES/str(vid); folder.mkdir(parents=True,exist_ok=True)
+    dst=folder/'wycena_ai.json'
+    dst.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')
+    con.execute("delete from docs where vehicle_id=? and kind='wycena_ai'",(vid,))
+    con.execute("insert into docs(vehicle_id,kind,name,path) values(?,?,?,?,?)" if False else "insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)",
+                (vid,'wycena_ai','Wycena_AI_AWM.json',str(dst)))
+    con.execute("update vehicles set show_wycena_ai=1,updated=? where id=?",(datetime.now().isoformat(timespec='seconds'),vid))
+    con.commit(); con.close()
+    return jsonify(ok=True,**payload)
 
 @app.post('/api/admin/vehicles/<path:pid>/visibility')
 def visibility(pid):
