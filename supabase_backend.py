@@ -1,4 +1,5 @@
 import os, json, secrets, hashlib, hmac, zipfile, tempfile, shutil, mimetypes
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from io import BytesIO
@@ -196,11 +197,33 @@ def add_document(pid,kind):
     try:
         data=request.get_data()
         if not data or len(data)<32: return jsonify(error="empty document"),400
-        f.write_bytes(data); _delete_docs(v["id"],[kind]); stored=_store(v["id"],pid,kind,f)
+        f.write_bytes(data)
+        # OPIS DOCX: serwer tworzy wierny PDF z TEGO SAMEGO pliku przez LibreOffice.
+        # Desktop nie musi mieć Worda ani LibreOffice.
+        preview_file=None
+        if kind=="opis" and f.suffix.lower()==".docx":
+            out=td/"pdf"; out.mkdir(exist_ok=True)
+            try:
+                r=subprocess.run(["libreoffice","--headless","--convert-to","pdf","--outdir",str(out),str(f)],
+                                 stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
+                made=out/(f.stem+".pdf")
+                if r.returncode!=0 or not made.is_file() or made.stat().st_size<1000:
+                    msg=(r.stderr or r.stdout or b"").decode(errors="ignore")[-600:]
+                    return jsonify(error="server pdf conversion failed",detail=msg),500
+                preview_file=made
+            except Exception as ex:
+                return jsonify(error="server pdf conversion unavailable",detail=str(ex)),500
+        _delete_docs(v["id"],[kind])
+        stored=_store(v["id"],pid,kind,f)
         if not stored: return jsonify(error="document metadata not stored"),500
+        preview_stored=None
+        if preview_file is not None:
+            _delete_docs(v["id"],["opis_pdf"])
+            preview_stored=_store(v["id"],pid,"opis_pdf",preview_file)
+            if not preview_stored: return jsonify(error="preview metadata not stored"),500
         show_key="show_opis" if kind=="opis_pdf" else "show_"+kind
         sb.table("vehicles").update({show_key:True,"updated":datetime.now().isoformat(timespec="seconds")}).eq("id",v["id"]).execute()
-        return jsonify(ok=True,size=len(data),doc_id=stored.get("id") if isinstance(stored,dict) else None)
+        return jsonify(ok=True,size=len(data),doc_id=stored.get("id") if isinstance(stored,dict) else None,preview_id=preview_stored.get("id") if isinstance(preview_stored,dict) else None,preview_generated=bool(preview_stored))
     finally: shutil.rmtree(td,ignore_errors=True)
 def expire(pid):
     if not api_ok():return jsonify(error="bad key"),403
