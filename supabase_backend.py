@@ -180,6 +180,24 @@ def admin_vehicles():
         x=dict(v); x.update(has_opis="opis" in kinds,has_wycena="wycena" in kinds,has_raport="raport" in kinds,has_wycena_ai="wycena_ai" in kinds)
         out.append(x)
     return jsonify(vehicles=out)
+def save_ai_valuation(pid):
+    if not api_ok(): return jsonify(error="bad key"),403
+    v=_vehicle(pid)
+    if not v: return jsonify(error="not found"),404
+    x=request.get_json(silent=True) or {}
+    base=float(x.get("base_value",0) or 0)
+    pct=float(x.get("correction_pct",0) or 0)
+    final=round(base*(1-pct/100),2)
+    data=json.dumps({"base_value":base,"correction_pct":pct,"final_value":final,"reason":str(x.get("reason","") or ""),"currency":"PLN","price_type":"NETTO"},ensure_ascii=False).encode()
+    _delete_docs(v["id"],["wycena_ai"])
+    name="Wycena_AI_AWM.json"
+    key=_key(pid,"wycena_ai",name)
+    sb.storage.from_(BUCKET).upload(key,data,{"content-type":"application/json","upsert":"true"})
+    row={"vehicle_id":v["id"],"kind":"wycena_ai","name":name,"storage_path":key}
+    sb.table("docs").insert(row).execute()
+    sb.table("vehicles").update({"show_wycena_ai":True}).eq("id",v["id"]).execute()
+    return jsonify(ok=True,base_value=base,correction_pct=pct,final_value=final)
+
 def visibility(pid):
     if not api_ok(): return jsonify(error="bad key"),403
     v=_vehicle(pid)
@@ -288,6 +306,6 @@ def publish():
 
 def install_supabase(app):
     _init_admin()
-    repl={"login":login,"vehicles":vehicles,"file":file_route,"preview":preview,"admin_access":admin_access,"admin_vehicles":admin_vehicles,"visibility":visibility,"add_document":add_document,"expire":expire,"publish_auto":publish_auto,"publish_docs":publish_docs,"publish":publish}
+    repl={"login":login,"vehicles":vehicles,"file":file_route,"preview":preview,"admin_access":admin_access,"admin_vehicles":admin_vehicles,"save_ai_valuation":save_ai_valuation,"visibility":visibility,"add_document":add_document,"expire":expire,"publish_auto":publish_auto,"publish_docs":publish_docs,"publish":publish}
     for endpoint,fn in repl.items():
         if endpoint in app.view_functions: app.view_functions[endpoint]=fn
