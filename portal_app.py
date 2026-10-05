@@ -355,23 +355,8 @@ def add_document(pid,kind):
     if not data or len(data)<32: c.close(); return jsonify(error='empty document'),400
     d=FILES/str(vid); d.mkdir(parents=True,exist_ok=True)
     dst=d/(secrets.token_hex(4)+'_'+name); dst.write_bytes(data)
+    # OPIS DOCX zapisujemy 1:1. Konwersja PDF nie może blokować uploadu na Renderze.
     preview=None
-    if kind=='opis' and dst.suffix.lower()=='.docx':
-        td=Path(tempfile.mkdtemp(dir=str(d)))
-        try:
-            office=shutil.which('libreoffice') or shutil.which('soffice') or '/usr/bin/libreoffice'
-            profile=td/'profile'; profile.mkdir()
-            env=os.environ.copy(); env['HOME']=str(td)
-            rr=subprocess.run([office,'-env:UserInstallation=file://'+str(profile),'--headless','--convert-to','pdf','--outdir',str(td),str(dst)],
-                              stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120,env=env)
-            made=td/(dst.stem+'.pdf')
-            if rr.returncode!=0 or not made.is_file() or made.stat().st_size<1000:
-                msg=(rr.stderr or rr.stdout or b'').decode(errors='ignore')[-600:]
-                preview=None  # DOCX zostaje zapisany; brak PDF nie blokuje OPISU
-            preview=d/(secrets.token_hex(4)+'_'+Path(name).stem+'.pdf'); shutil.copy2(made,preview)
-        except Exception as ex:
-            preview=None  # brak LibreOffice nie blokuje zapisu OPISU
-        finally: shutil.rmtree(td,ignore_errors=True)
     for old in c.execute('select id,path from docs where vehicle_id=? and kind=?',(vid,kind)).fetchall():
         try: Path(old['path']).unlink(missing_ok=True)
         except: pass
