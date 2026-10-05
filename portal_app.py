@@ -588,7 +588,7 @@ def admin_add_announcement():
 @app.get('/api/announcements/latest')
 def latest_announcement():
     if 'user' not in session: return jsonify(error='auth'),401
-    con=db(); rows=con.execute("select id,text,created,important from announcements where datetime(created) >= datetime('now','localtime','-8 hours') order by id desc limit 20").fetchall(); con.close()
+    con=db(); rows=con.execute('select id,text,created,important from announcements order by id desc limit 20').fetchall(); con.close()
     out=[dict(r) for r in rows]
     return jsonify(announcements=out,text=(out[0]['text'] if out else ''),created=(out[0]['created'] if out else ''))
 
