@@ -132,6 +132,30 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 /* AWM AI valuation amount under button */
 .actions .aivalbtn{height:auto!important;min-height:34px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;line-height:1.05!important;padding:5px 10px!important}
 .actions .aivalbtn small{display:block!important;margin-top:3px!important;color:#d61f1f!important;font-size:11px!important;font-weight:900!important;line-height:1!important}
+
+/* AWM DARK WORKSHOP UI — visual layer only */
+:root{--awm-red:#e2232e;--awm-red2:#ff3440;--awm-bg:#090b0d;--awm-panel:#111519;--awm-line:#2a3035;--awm-text:#f5f7f8;--awm-muted:#aab2b8}
+body{color:var(--awm-text)!important;background:radial-gradient(circle at 72% 0,#22282d 0,#0d1013 35%,#080a0c 72%) fixed!important}
+.top{height:158px!important;padding:0 5%!important;background:linear-gradient(90deg,#07090b 0%,#11161a 50%,#080a0c 100%)!important;border-bottom:3px solid var(--awm-red)!important;box-shadow:0 10px 35px #000b!important}
+.top:before{opacity:.24!important;filter:grayscale(1) contrast(1.2)!important}
+.brand,.logo,.top h1{position:relative;z-index:2}
+.logo,.top h1{font-weight:900!important;letter-spacing:-2px!important;text-shadow:0 2px 18px #000!important}
+.top h1:first-letter,.logo:first-letter{color:var(--awm-red)!important}
+.wrap,.container,main{max-width:1480px!important}
+.card,.panel,.vehicle,.vehicle-card,.box,.modal-content{background:linear-gradient(145deg,#151a1e,#0e1114)!important;color:var(--awm-text)!important;border:1px solid var(--awm-line)!important;box-shadow:0 12px 35px #0005!important}
+input,select,textarea{background:#090c0e!important;color:#fff!important;border:1px solid #343b41!important}
+input:focus,select:focus,textarea:focus{outline:none!important;border-color:var(--awm-red)!important;box-shadow:0 0 0 3px #e2232e22!important}
+button,.btn,a.btn{border-radius:8px!important}
+button.primary,.btn.primary,.green,.btn-green,[class*="primary"]{background:linear-gradient(135deg,var(--awm-red),#a90e18)!important;border-color:var(--awm-red)!important;color:#fff!important}
+button:hover,.btn:hover{filter:brightness(1.08)}
+h1,h2,h3,h4,strong,b{color:#fff}
+.muted,.sub,.small{color:var(--awm-muted)!important}
+table{background:#101417!important;color:#eef1f3!important}
+th{background:#191e22!important;color:#fff!important;border-color:#30363b!important}
+td{border-color:#292f34!important}
+a{color:#ff5963}
+.badge,.tag{border-color:#4a4f54!important}
+@media(max-width:760px){.top{height:auto!important;min-height:130px!important;padding:24px 20px!important}}
 </style></head><body>
 <header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><div class="who" id="who"><span class="status">● ONLINE</span><span>AWM</span><span class="avatar">W</span></div></header>
 <div class="watermark"><div class="car"></div><div class="awm">AWM</div><div class="wm-sub">DIAGNOSTYKA POJAZDÓW</div></div>
