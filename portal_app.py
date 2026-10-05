@@ -37,8 +37,7 @@ def init_db():
     cols={r[1] for r in c.execute('pragma table_info(vehicles)').fetchall()}
     for col in ('show_opis','show_wycena','show_raport','show_wycena_ai'):
         if col not in cols: c.execute(f'alter table vehicles add column {col} INTEGER DEFAULT 1')
-    acols={r[1] for r in c.execute('pragma table_info(announcements)').fetchall()}
-    if 'important' not in acols: c.execute('alter table announcements add column important INTEGER DEFAULT 0')
+
     if not c.execute('select 1 from users where login=?',(ADMIN_USER,)).fetchone():
         c.execute('insert into users(login,pass,role) values(?,?,?)',(ADMIN_USER,ph(ADMIN_PASS),'admin'))
     c.commit(); c.close()
@@ -323,6 +322,8 @@ def save_ai_valuation(pid):
                 (vid,'wycena_ai','Wycena_AI_AWM.json',str(dst)))
     con.execute("update vehicles set show_wycena_ai=1,updated=? where id=?",(datetime.now().isoformat(timespec='seconds'),vid))
 
+    acols={r[1] for r in c.execute('pragma table_info(announcements)').fetchall()}
+    if 'important' not in acols: c.execute('alter table announcements add column important INTEGER DEFAULT 0')
     con.commit(); con.close()
     return jsonify(ok=True,**payload)
 
