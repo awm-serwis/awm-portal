@@ -382,7 +382,7 @@ def add_document(pid,kind):
         c.execute("delete from docs where vehicle_id=? and kind='opis_pdf'",(vid,))
         cur=c.execute('insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)',(vid,'opis_pdf',preview.name,str(preview)))
         preview_id=cur.lastrowid
-    c.execute('update vehicles set '+{'opis':'show_opis','opis_pdf':'show_opis','wycena':'show_wycena','raport':'show_raport','wycena_ai':'show_wycena_ai'}[kind]+'=1 where id=?',(vid,))
+    c.execute('update vehicles set '+{'opis':'show_opis','opis_pdf':'show_opis','wycena':'show_wycena','raport':'show_raport','soh':'show_soh','wycena_ai':'show_wycena_ai'}[kind]+'=1 where id=?',(vid,))
     c.commit(); c.close()
     return jsonify(ok=True,size=len(data),preview_generated=bool(preview),preview_id=preview_id)
 
