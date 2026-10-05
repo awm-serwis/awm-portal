@@ -367,10 +367,10 @@ def add_document(pid,kind):
             made=td/(dst.stem+'.pdf')
             if rr.returncode!=0 or not made.is_file() or made.stat().st_size<1000:
                 msg=(rr.stderr or rr.stdout or b'').decode(errors='ignore')[-600:]
-                dst.unlink(missing_ok=True); c.close(); return jsonify(error='server pdf conversion failed',detail=msg),500
+                preview=None  # DOCX zostaje zapisany; brak PDF nie blokuje OPISU
             preview=d/(secrets.token_hex(4)+'_'+Path(name).stem+'.pdf'); shutil.copy2(made,preview)
         except Exception as ex:
-            dst.unlink(missing_ok=True); c.close(); return jsonify(error='server pdf conversion unavailable',detail=str(ex)),500
+            preview=None  # brak LibreOffice nie blokuje zapisu OPISU
         finally: shutil.rmtree(td,ignore_errors=True)
     for old in c.execute('select id,path from docs where vehicle_id=? and kind=?',(vid,kind)).fetchall():
         try: Path(old['path']).unlink(missing_ok=True)
