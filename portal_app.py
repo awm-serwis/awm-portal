@@ -551,6 +551,20 @@ def admin_questions_read():
     con=db(); con.execute('update questions set read=1 where read=0'); con.commit(); con.close()
     return jsonify(ok=True,unread=0)
 
+@app.post('/api/admin/questions/delete')
+def admin_questions_delete():
+    if not api_ok(): return jsonify(error='bad key'),403
+    x=request.get_json(silent=True) or {}
+    ids=x.get('ids') or []
+    try: ids=[int(i) for i in ids]
+    except: return jsonify(error='bad ids'),400
+    if not ids: return jsonify(ok=True,deleted=0)
+    con=db()
+    marks=','.join('?' for _ in ids)
+    cur=con.execute(f'delete from questions where id in ({marks})',ids)
+    con.commit(); deleted=cur.rowcount; con.close()
+    return jsonify(ok=True,deleted=deleted)
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '10000'))
     app.run(host='0.0.0.0', port=port, debug=False)
