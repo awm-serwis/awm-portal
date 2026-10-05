@@ -344,7 +344,10 @@ def visibility(pid):
 @app.post('/api/admin/vehicles/<path:pid>/document/<kind>')
 def add_document(pid,kind):
     if not api_ok(): return jsonify(error='bad key'),403
-    if kind not in ('opis','opis_pdf','wycena','raport','soh','wycena_ai'): return jsonify(error='bad kind'),400
+    kind=(kind or '').strip().lower()
+    # RAPORT SOH: accept current and legacy client aliases, normalize to one stored kind.
+    if kind in ('raport_soh','report_soh','battery_soh'): kind='soh'
+    if kind not in ('opis','opis_pdf','wycena','raport','soh','wycena_ai'): return jsonify(error='bad kind',kind=kind),400
     c=db(); r=c.execute('select id from vehicles where portal_id=?',(pid,)).fetchone()
     if not r: c.close(); return jsonify(error='vehicle not found'),404
     vid=r['id']; name=safe(request.args.get('name') or ('dokument_'+kind))
