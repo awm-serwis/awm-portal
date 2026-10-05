@@ -540,8 +540,15 @@ def admin_questions():
     con=db()
     rows=con.execute('select q.id,q.user,q.text,q.created,q.read,v.marka,v.model,v.rej,v.vin from questions q left join vehicles v on v.id=q.vehicle_id order by q.id desc limit 200').fetchall()
     out=[dict(r) for r in rows]
+    unread=sum(1 for r in out if not int(r.get('read') or 0))
     con.close()
-    return jsonify(questions=out)
+    return jsonify(questions=out,unread=unread)
+
+@app.post('/api/admin/questions/read')
+def admin_questions_read():
+    if not api_ok(): return jsonify(error='bad key'),403
+    con=db(); con.execute('update questions set read=1 where read=0'); con.commit(); con.close()
+    return jsonify(ok=True,unread=0)
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '10000'))
