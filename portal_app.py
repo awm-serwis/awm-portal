@@ -31,6 +31,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,login TEXT UNIQUE,pass TEXT,role TEXT);
     CREATE TABLE IF NOT EXISTS vehicles(id INTEGER PRIMARY KEY,portal_id TEXT UNIQUE,marka TEXT,model TEXT,rej TEXT,vin TEXT,przebieg TEXT,rok TEXT,updated TEXT,active INTEGER DEFAULT 1,show_opis INTEGER DEFAULT 1,show_wycena INTEGER DEFAULT 1,show_raport INTEGER DEFAULT 1,show_wycena_ai INTEGER DEFAULT 1);
     CREATE TABLE IF NOT EXISTS docs(id INTEGER PRIMARY KEY,vehicle_id INTEGER,kind TEXT,name TEXT,path TEXT);
+    CREATE TABLE IF NOT EXISTS questions(id INTEGER PRIMARY KEY,vehicle_id INTEGER,user TEXT,text TEXT,created TEXT,read INTEGER DEFAULT 0);
     ''')
     cols={r[1] for r in c.execute('pragma table_info(vehicles)').fetchall()}
     for col in ('show_opis','show_wycena','show_raport','show_wycena_ai'):
@@ -317,15 +318,7 @@ def save_ai_valuation(pid):
     con.execute("insert into docs(vehicle_id,kind,name,path) values(?,?,?,?,?)" if False else "insert into docs(vehicle_id,kind,name,path) values(?,?,?,?)",
                 (vid,'wycena_ai','Wycena_AI_AWM.json',str(dst)))
     con.execute("update vehicles set show_wycena_ai=1,updated=? where id=?",(datetime.now().isoformat(timespec='seconds'),vid))
-    
-    con.execute("""CREATE TABLE IF NOT EXISTS questions(
-      id INTEGER PRIMARY KEY,
-      vehicle_id INTEGER,
-      user TEXT,
-      text TEXT,
-      created TEXT,
-      read INTEGER DEFAULT 0
-    )""")
+
     con.commit(); con.close()
     return jsonify(ok=True,**payload)
 
