@@ -38,6 +38,10 @@ def init_db():
     for col in ('show_opis','show_wycena','show_raport','show_wycena_ai'):
         if col not in cols: c.execute(f'alter table vehicles add column {col} INTEGER DEFAULT 1')
 
+    acols={r[1] for r in c.execute('pragma table_info(announcements)').fetchall()}
+    if 'important' not in acols:
+        c.execute('alter table announcements add column important INTEGER DEFAULT 0')
+
     if not c.execute('select 1 from users where login=?',(ADMIN_USER,)).fetchone():
         c.execute('insert into users(login,pass,role) values(?,?,?)',(ADMIN_USER,ph(ADMIN_PASS),'admin'))
     c.commit(); c.close()
