@@ -583,6 +583,25 @@ def latest_announcement():
     con=db(); r=con.execute('select text,created from announcements order by id desc limit 1').fetchone(); con.close()
     return jsonify(text=(r['text'] if r else ''),created=(r['created'] if r else ''))
 
+@app.get('/api/admin/announcements')
+def admin_announcements():
+    if not api_ok(): return jsonify(error='bad key'),403
+    con=db(); rows=con.execute('select id,text,created from announcements order by id desc limit 200').fetchall(); con.close()
+    out=[dict(r) for r in rows]
+    return jsonify(announcements=out,count=len(out))
+
+@app.post('/api/admin/announcements/delete')
+def admin_announcements_delete():
+    if not api_ok(): return jsonify(error='bad key'),403
+    x=request.get_json(silent=True) or {}; ids=x.get('ids') or []
+    try: ids=[int(i) for i in ids]
+    except: return jsonify(error='bad ids'),400
+    if not ids: return jsonify(ok=True,deleted=0)
+    con=db(); marks=','.join('?' for _ in ids)
+    cur=con.execute(f'delete from announcements where id in ({marks})',ids)
+    con.commit(); deleted=cur.rowcount; con.close()
+    return jsonify(ok=True,deleted=deleted)
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '10000'))
     app.run(host='0.0.0.0', port=port, debug=False)
