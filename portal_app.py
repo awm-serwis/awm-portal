@@ -618,11 +618,6 @@ def admin_announcements_delete():
     con.commit(); deleted=cur.rowcount; con.close()
     return jsonify(ok=True,deleted=deleted)
 
-if __name__ == '__main__':
-    port = int(os.getenv('PORT', '10000'))
-    app.run(host='0.0.0.0', port=port, debug=False)
-
-
 # --- AWM desktop updater / suggestions ---
 AWM_DESKTOP_VERSION = '5.3.125'
 AWM_DESKTOP_UPDATE_NOTES = 'V125 - automatyczny czerwony wykrzyknik na kaflu AKTUALIZACJA gdy jest nowa wersja'
@@ -738,3 +733,7 @@ def awm_updater_suggestions_get():
             try: rows.append(json.loads(line))
             except: pass
     return jsonify({'ok':True,'storage':'local-fallback','suggestions':rows})
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', '10000'))
+    app.run(host='0.0.0.0', port=port, debug=False)
