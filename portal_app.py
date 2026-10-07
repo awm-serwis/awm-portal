@@ -624,8 +624,8 @@ if __name__ == '__main__':
 
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = '5.3.124'
-AWM_DESKTOP_UPDATE_NOTES = 'V124 - poprawka kafla AKTUALIZACJA i statusy SUGESTII'
+AWM_DESKTOP_VERSION = '5.3.125'
+AWM_DESKTOP_UPDATE_NOTES = 'V125 - automatyczny czerwony wykrzyknik na kaflu AKTUALIZACJA gdy jest nowa wersja'
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
@@ -651,7 +651,7 @@ for bk in backs:
         if "def open_awm_suggestions" in cand and "_top_status_tile('HV','SOH Z HV'" in cand:
             src=cand; break
 if src is None: raise RuntimeError('Brak pelnego zrodla AWM.')
-src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]","APP_VERSION='5.3.124'",src,count=1)
+src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]","APP_VERSION='5.3.125'",src,count=1)
 src=src.replace("self.awm_update_btn.config(text=(f'🔄  AKTUALIZACJA  🔴 {self._awm_update_count}' if self._awm_update_count else '🔄  AKTUALIZACJA'))","self.awm_update_badge.config(text=('❗' if self._awm_update_count else '')) if hasattr(self,'awm_update_badge') else None")
 old="        _action_tile('💡','SUGESTIE',self.open_awm_suggestions,3,2)"
 new=old+"\\n        self.awm_update_tile=_action_tile('↻','AKTUALIZACJA',lambda:self.check_awm_updates(True),2,3)\\n        self.awm_update_badge=tk.Label(self.awm_update_tile,text='',font=('Segoe UI Semibold',12),fg='#e11d48',bg='#f3f7f6',padx=3,pady=0)\\n        self.awm_update_badge.place(relx=0.97,rely=0.50,anchor='e')\\n        self.awm_update_badge.bind('<Button-1>',lambda e:self.check_awm_updates(True))"
@@ -664,14 +664,38 @@ src=src.replace("ttk.Button(foot,text='ZAMKNIJ',command=w.destroy).pack(side='le
 anchor="    def _single_window_active(self, key):"
 hist="    def open_awm_sent_suggestions(self):\\n        try:\\n            client_path=os.path.join(APP_DIR,'awm_client_id.txt')\\n            if not os.path.isfile(client_path): messagebox.showinfo('WYSŁANE WIADOMOŚCI','Brak wysłanych zgłoszeń.'); return\\n            client_id=Path(client_path).read_text(encoding='utf-8').strip()\\n            url=self._awm_update_cfg().get('suggestions_url','')+'/mine?client_id='+urllib.parse.quote(client_id)\\n            with urllib.request.urlopen(url,timeout=10) as r: data=json.loads(r.read().decode('utf-8-sig'))\\n            rows=data.get('suggestions',[])\\n            win=tk.Toplevel(self); win.title('WYSŁANE WIADOMOŚCI • AWM'); win.geometry('760x480')\\n            txt=tk.Text(win,wrap='word',font=('Segoe UI',10)); txt.pack(fill='both',expand=True,padx=12,pady=12)\\n            icons={'NOWA':'●','ODCZYTANA':'✓','W REALIZACJI':'🔧','GOTOWE':'✅'}\\n            for x in rows:\\n                st=str(x.get('status') or 'NOWA').upper(); txt.insert('end',str(icons.get(st,'•'))+' '+st+'  #'+str(x.get('id',''))+'\\\\n'+str(x.get('text',''))+'\\\\n\\\\n')\\n            txt.config(state='disabled')\\n        except Exception as ex: messagebox.showerror('WYSŁANE WIADOMOŚCI','Nie udało się pobrać statusów.\\\\n\\\\n'+str(ex))\\n\\n"
 if "def open_awm_sent_suggestions" not in src: src=src.replace(anchor,hist+anchor,1)
+# Automatyczne sprawdzenie aktualizacji po starcie, bez okna dialogowego.
+auto_code = """
+    def _awm_auto_update_badge(self):
+        try:
+            cfg=self._awm_update_cfg()
+            url=cfg.get('manifest_url','')
+            with urllib.request.urlopen(url,timeout=5) as r:
+                d=json.loads(r.read().decode('utf-8-sig'))
+            remote=str(d.get('version') or '').strip()
+            def ver(v):
+                return tuple(int(x) for x in re.findall(r'\\d+',v)[:4])
+            available=bool(remote and ver(remote)>ver(APP_VERSION))
+            if hasattr(self,'awm_update_badge'):
+                self.awm_update_badge.config(text=('❗' if available else ''),fg='#e11d48')
+        except Exception:
+            pass
+"""
+anchor="    def _single_window_active(self, key):"
+if "def _awm_auto_update_badge" not in src:
+    src=src.replace(anchor,auto_code+"\\n"+anchor,1)
+# Uruchom sprawdzenie kilka sekund po zbudowaniu UI.
+hook="        _action_tile('💡','SUGESTIE',self.open_awm_suggestions,3,2)"
+if "self.after(2500,self._awm_auto_update_badge)" not in src:
+    src=src.replace(hook,hook+"\\n        self.after(2500,self._awm_auto_update_badge)",1)
 exec(compile(src,str(HERE/'generator_awm.py'),'exec'),globals(),globals())
 """
     mem=io.BytesIO()
     with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('generator_awm.py',wrapper)
-        z.writestr('AKTUALIZACJA_V124_OK.txt','V124 - KAFEL I STATUSY SUGESTII')
+        z.writestr('AKTUALIZACJA_V125_OK.txt','V125 - AUTO WYKRZYKNIK AKTUALIZACJI')
     mem.seek(0)
-    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V124.zip')
+    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V125.zip')
 
 def _awm_suggestions_sb():
     try:
