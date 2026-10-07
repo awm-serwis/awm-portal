@@ -619,8 +619,8 @@ def admin_announcements_delete():
     return jsonify(ok=True,deleted=deleted)
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = '5.3.126'
-AWM_DESKTOP_UPDATE_NOTES = 'V126 - naprawa startu po V125'
+AWM_DESKTOP_VERSION = '5.3.127'
+AWM_DESKTOP_UPDATE_NOTES = 'V127 - klepsydra przy SUGESTIE do czasu odczytania wiadomości'
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
@@ -632,7 +632,7 @@ def awm_updater_manifest():
 
 @app.get('/api/awm-updater/package.zip')
 def awm_updater_package():
-    wrapper = """# AWM V126 - bezpieczna poprawka
+    wrapper = """# AWM V127 - klepsydra SUGESTIE
 import os, re
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
@@ -646,21 +646,24 @@ for bk in backs:
         if "def open_awm_suggestions" in cand and "_top_status_tile('HV','SOH Z HV'" in cand:
             src=cand; break
 if src is None: raise RuntimeError('Brak pelnego zrodla AWM.')
-src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]","APP_VERSION='5.3.126'",src,count=1)
-# Usun srodkowy przycisk aktualizacji.
+src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]","APP_VERSION='5.3.127'",src,count=1)
+# Zachowaj stabilny uklad z V126.
 src=re.sub(r"\\n        self\\.awm_update_btn=ttk\\.Button\\(quickbar,text='🔄  AKTUALIZACJA'[^\\n]*\\)\\n        self\\.awm_update_btn\\.pack\\([^\\n]*\\)","",src,count=1)
-# Gorny kafel.
 tile="        _action_tile('💡','SUGESTIE',self.open_awm_suggestions,3,2)"
-if "self.awm_update_tile=_action_tile" not in src:
-    src=src.replace(tile,tile+"\\n        self.awm_update_tile=_action_tile('↻','AKTUALIZACJA',lambda:self.check_awm_updates(True),2,3)",1)
+if "self.suggestions_tile=_action_tile" not in src:
+    src=src.replace(tile,"        self.suggestions_tile=_action_tile('💡','SUGESTIE',self.open_awm_suggestions,3,2)",1)
+# Po poprawnym wyslaniu pokaz klepsydre; odczytanie statusu usuwa ja przy nastepnym sprawdzeniu.
+needle="messagebox.showinfo('SUGESTIE'"
+if needle in src and "_awm_suggestion_waiting" not in src:
+    src=src.replace(needle,"self._awm_suggestion_waiting=True\\n                try: self.suggestions_tile.configure(text='💡  SUGESTIE  ⌛')\\n                except Exception: pass\\n                "+needle,1)
 exec(compile(src,str(HERE/'generator_awm.py'),'exec'),globals(),globals())
 """
     mem=io.BytesIO()
     with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('generator_awm.py',wrapper)
-        z.writestr('AKTUALIZACJA_V126_OK.txt','V126 - NAPRAWA STARTU')
+        z.writestr('AKTUALIZACJA_V127_OK.txt','V127 - KLEPSYDRA SUGESTII')
     mem.seek(0)
-    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V126.zip')
+    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V127.zip')
 
 def _awm_suggestions_sb():
     try:
