@@ -614,3 +614,34 @@ def admin_announcements_delete():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '10000'))
     app.run(host='0.0.0.0', port=port, debug=False)
+
+
+# --- AWM desktop updater / suggestions ---
+AWM_DESKTOP_VERSION = os.getenv('AWM_DESKTOP_VERSION', '5.3.114')
+AWM_DESKTOP_UPDATE_URL = os.getenv('AWM_DESKTOP_UPDATE_URL', '')
+AWM_DESKTOP_UPDATE_NOTES = os.getenv('AWM_DESKTOP_UPDATE_NOTES', 'Aktualizacja PRZEGLAD AWM')
+
+@app.get('/api/awm-updater/manifest.json')
+def awm_updater_manifest():
+    return jsonify({'version':AWM_DESKTOP_VERSION,'download_url':AWM_DESKTOP_UPDATE_URL,'notes':AWM_DESKTOP_UPDATE_NOTES})
+
+@app.post('/api/awm-updater/suggestions')
+def awm_updater_suggestions_post():
+    d=request.get_json(silent=True) or {}
+    txt=str(d.get('text') or '').strip()
+    if not txt: return jsonify({'ok':False,'error':'empty'}),400
+    p=DATA/'awm_suggestions.jsonl'
+    row={'text':txt[:10000],'version':str(d.get('version') or '')[:50],'computer':str(d.get('computer') or '')[:120],'sent_at':str(d.get('sent_at') or datetime.now().isoformat(timespec='seconds'))[:80],'received_at':datetime.now().isoformat(timespec='seconds')}
+    with p.open('a',encoding='utf-8') as fh: fh.write(json.dumps(row,ensure_ascii=False)+'\\n')
+    return jsonify({'ok':True})
+
+@app.get('/api/awm-updater/suggestions')
+def awm_updater_suggestions_get():
+    key=request.args.get('key','')
+    if not hmac.compare_digest(key,API_KEY): return jsonify({'ok':False}),403
+    p=DATA/'awm_suggestions.jsonl'; rows=[]
+    if p.exists():
+        for line in p.read_text(encoding='utf-8',errors='ignore').splitlines()[-200:]:
+            try: rows.append(json.loads(line))
+            except: pass
+    return jsonify({'ok':True,'suggestions':rows})
