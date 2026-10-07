@@ -624,8 +624,8 @@ if __name__ == '__main__':
 
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = '5.3.122'
-AWM_DESKTOP_UPDATE_NOTES = 'V122 - czerwony wykrzyknik przy AKTUALIZACJA tylko gdy jest nowa wersja; usuniety dolny kafel'
+AWM_DESKTOP_VERSION = '5.3.123'
+AWM_DESKTOP_UPDATE_NOTES = 'V123 - usuniety srodkowy kafel AKTUALIZACJA; zostaje tylko gorny'
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
@@ -637,7 +637,7 @@ def awm_updater_manifest():
 
 @app.get('/api/awm-updater/package.zip')
 def awm_updater_package():
-    wrapper = """# AWM V122 - status aktualizacji w gornym kaflu
+    wrapper = """# AWM V123 - tylko gorny kafel aktualizacji
 import os, re
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
@@ -653,7 +653,7 @@ for bk in backs:
             break
 if src is None:
     raise RuntimeError('Brak pelnego zrodla AWM w kopii bezpieczenstwa.')
-src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]", "APP_VERSION='5.3.122'", src, count=1)
+src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]", "APP_VERSION='5.3.123'", src, count=1)
 # Usun stary dolny kafel aktualizacji, jesli byl dodany przy przycisku Cloud.
 src=re.sub(r"^.*_action_tile\\([^\\n]*['\\\"]AKTUALIZACJA['\\\"][^\\n]*\\)\\s*$","",src,flags=re.M)
 # Dodaj tylko gorny kafel. Czerwony znak jest czescia etykiety stanu i pojawia sie po wykryciu update.
@@ -668,9 +668,9 @@ exec(compile(src, str(HERE/'generator_awm.py'), 'exec'), globals(), globals())
     mem=io.BytesIO()
     with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('generator_awm.py',wrapper)
-        z.writestr('AKTUALIZACJA_V122_OK.txt','V122 - CZERWONY WYKRZYKNIK AKTUALIZACJI')
+        z.writestr('AKTUALIZACJA_V123_OK.txt','V123 - TYLKO GORNY KAFEL AKTUALIZACJA')
     mem.seek(0)
-    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V122.zip')
+    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V123.zip')
 
 def _awm_suggestions_sb():
     try:
