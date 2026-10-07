@@ -624,8 +624,8 @@ if __name__ == '__main__':
 
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = '5.3.123'
-AWM_DESKTOP_UPDATE_NOTES = 'V123 - usuniety srodkowy kafel AKTUALIZACJA; zostaje tylko gorny'
+AWM_DESKTOP_VERSION = '5.3.124'
+AWM_DESKTOP_UPDATE_NOTES = 'V124 - poprawka kafla AKTUALIZACJA i statusy SUGESTII'
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
@@ -637,40 +637,41 @@ def awm_updater_manifest():
 
 @app.get('/api/awm-updater/package.zip')
 def awm_updater_package():
-    wrapper = """# AWM V123 - tylko gorny kafel aktualizacji
+    wrapper = """# AWM V124
 import os, re
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 PARENT=HERE.parent
-backs=sorted(PARENT.glob('AWM_BACKUP_*'), key=lambda p:p.stat().st_mtime, reverse=True)
+backs=sorted(PARENT.glob('AWM_BACKUP_*'),key=lambda p:p.stat().st_mtime,reverse=True)
 src=None
 for bk in backs:
     gp=bk/'generator_awm.py'
     if gp.is_file():
         cand=gp.read_text(encoding='utf-8')
-        if "def check_awm_updates" in cand and "V120 update-box test wrapper" not in cand and "V121 - kafel AKTUALIZACJA" not in cand:
-            src=cand
-            break
-if src is None:
-    raise RuntimeError('Brak pelnego zrodla AWM w kopii bezpieczenstwa.')
-src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]", "APP_VERSION='5.3.123'", src, count=1)
-# Usun stary dolny kafel aktualizacji, jesli byl dodany przy przycisku Cloud.
-src=re.sub(r"^.*_action_tile\\([^\\n]*['\\\"]AKTUALIZACJA['\\\"][^\\n]*\\)\\s*$","",src,flags=re.M)
-# Dodaj tylko gorny kafel. Czerwony znak jest czescia etykiety stanu i pojawia sie po wykryciu update.
-needle="        close_tile=_action_tile('✕','ZAMKNIJ PROGRAM',self.destroy,1,3)"
-add=needle+"\\n        self.top_update_tile=_action_tile('↻','AKTUALIZACJA',lambda:self.check_awm_updates(True),2,3)"
-if "self.top_update_tile=_action_tile" not in src:
-    src=src.replace(needle,add,1)
-# Po wykryciu nowszej wersji pokaz czerwony wykrzyknik po prawej; po braku aktualizacji wyczysc.
-src=src.replace("messagebox.askyesno('Aktualizacja AWM'", "self._awm_update_available=True\\n                try: self.top_update_tile.configure(text='↻  AKTUALIZACJA                         ❗', text_color='#ff2b2b')\\n                except Exception: pass\\n                messagebox.askyesno('Aktualizacja AWM'",1)
-exec(compile(src, str(HERE/'generator_awm.py'), 'exec'), globals(), globals())
+        if "def open_awm_suggestions" in cand and "_top_status_tile('HV','SOH Z HV'" in cand:
+            src=cand; break
+if src is None: raise RuntimeError('Brak pelnego zrodla AWM.')
+src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]","APP_VERSION='5.3.124'",src,count=1)
+src=src.replace("self.awm_update_btn.config(text=(f'🔄  AKTUALIZACJA  🔴 {self._awm_update_count}' if self._awm_update_count else '🔄  AKTUALIZACJA'))","self.awm_update_badge.config(text=('❗' if self._awm_update_count else '')) if hasattr(self,'awm_update_badge') else None")
+old="        _action_tile('💡','SUGESTIE',self.open_awm_suggestions,3,2)"
+new=old+"\\n        self.awm_update_tile=_action_tile('↻','AKTUALIZACJA',lambda:self.check_awm_updates(True),2,3)\\n        self.awm_update_badge=tk.Label(self.awm_update_tile,text='',font=('Segoe UI Semibold',12),fg='#e11d48',bg='#f3f7f6',padx=3,pady=0)\\n        self.awm_update_badge.place(relx=0.97,rely=0.50,anchor='e')\\n        self.awm_update_badge.bind('<Button-1>',lambda e:self.check_awm_updates(True))"
+if "self.awm_update_tile=_action_tile" not in src: src=src.replace(old,new,1)
+src=re.sub(r"\\n        self\\.awm_update_btn=ttk\\.Button\\(quickbar,text='🔄  AKTUALIZACJA'[^\\n]*\\)\\n        self\\.awm_update_btn\\.pack\\([^\\n]*\\)","",src,count=1)
+payload="payload={'text':msg,'version':APP_VERSION,'computer':socket.gethostname(),'sent_at':_dt.datetime.now().isoformat(timespec='seconds')}"
+pn="client_path=os.path.join(APP_DIR,'awm_client_id.txt')\\n                try:\\n                    client_id=Path(client_path).read_text(encoding='utf-8').strip()\\n                except Exception:\\n                    import uuid\\n                    client_id=str(uuid.uuid4()); Path(client_path).write_text(client_id,encoding='utf-8')\\n                payload={'text':msg,'version':APP_VERSION,'computer':socket.gethostname(),'client_id':client_id,'sent_at':_dt.datetime.now().isoformat(timespec='seconds')}"
+src=src.replace(payload,pn,1)
+src=src.replace("ttk.Button(foot,text='ZAMKNIJ',command=w.destroy).pack(side='left',padx=5)","ttk.Button(foot,text='ZAMKNIJ',command=w.destroy).pack(side='left',padx=5)\\n        ttk.Button(foot,text='WYSŁANE WIADOMOŚCI',command=self.open_awm_sent_suggestions).pack(side='left',padx=5)",1)
+anchor="    def _single_window_active(self, key):"
+hist="    def open_awm_sent_suggestions(self):\\n        try:\\n            client_path=os.path.join(APP_DIR,'awm_client_id.txt')\\n            if not os.path.isfile(client_path): messagebox.showinfo('WYSŁANE WIADOMOŚCI','Brak wysłanych zgłoszeń.'); return\\n            client_id=Path(client_path).read_text(encoding='utf-8').strip()\\n            url=self._awm_update_cfg().get('suggestions_url','')+'/mine?client_id='+urllib.parse.quote(client_id)\\n            with urllib.request.urlopen(url,timeout=10) as r: data=json.loads(r.read().decode('utf-8-sig'))\\n            rows=data.get('suggestions',[])\\n            win=tk.Toplevel(self); win.title('WYSŁANE WIADOMOŚCI • AWM'); win.geometry('760x480')\\n            txt=tk.Text(win,wrap='word',font=('Segoe UI',10)); txt.pack(fill='both',expand=True,padx=12,pady=12)\\n            icons={'NOWA':'●','ODCZYTANA':'✓','W REALIZACJI':'🔧','GOTOWE':'✅'}\\n            for x in rows:\\n                st=str(x.get('status') or 'NOWA').upper(); txt.insert('end',str(icons.get(st,'•'))+' '+st+'  #'+str(x.get('id',''))+'\\\\n'+str(x.get('text',''))+'\\\\n\\\\n')\\n            txt.config(state='disabled')\\n        except Exception as ex: messagebox.showerror('WYSŁANE WIADOMOŚCI','Nie udało się pobrać statusów.\\\\n\\\\n'+str(ex))\\n\\n"
+if "def open_awm_sent_suggestions" not in src: src=src.replace(anchor,hist+anchor,1)
+exec(compile(src,str(HERE/'generator_awm.py'),'exec'),globals(),globals())
 """
     mem=io.BytesIO()
     with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('generator_awm.py',wrapper)
-        z.writestr('AKTUALIZACJA_V123_OK.txt','V123 - TYLKO GORNY KAFEL AKTUALIZACJA')
+        z.writestr('AKTUALIZACJA_V124_OK.txt','V124 - KAFEL I STATUSY SUGESTII')
     mem.seek(0)
-    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V123.zip')
+    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V124.zip')
 
 def _awm_suggestions_sb():
     try:
@@ -684,7 +685,7 @@ def awm_updater_suggestions_post():
     d=request.get_json(silent=True) or {}
     txt=str(d.get('text') or '').strip()
     if not txt: return jsonify({'ok':False,'error':'empty'}),400
-    row={'text':txt[:10000],'version':str(d.get('version') or '')[:50],'computer':str(d.get('computer') or '')[:120],'sent_at':str(d.get('sent_at') or datetime.now().isoformat(timespec='seconds'))[:80],'received_at':datetime.now().isoformat(timespec='seconds'),'status':'NOWA'}
+    row={'text':txt[:10000],'version':str(d.get('version') or '')[:50],'computer':str(d.get('computer') or '')[:120],'client_id':str(d.get('client_id') or '')[:100],'sent_at':str(d.get('sent_at') or datetime.now().isoformat(timespec='seconds'))[:80],'received_at':datetime.now().isoformat(timespec='seconds'),'status':'NOWA'}
     sb=_awm_suggestions_sb()
     if sb:
         try:
