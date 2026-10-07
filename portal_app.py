@@ -624,8 +624,8 @@ if __name__ == '__main__':
 
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = '5.3.121'
-AWM_DESKTOP_UPDATE_NOTES = 'V121 - kafel AKTUALIZACJA obok ZAPYTANIA, pod ZAMKNIJ PROGRAM'
+AWM_DESKTOP_VERSION = '5.3.122'
+AWM_DESKTOP_UPDATE_NOTES = 'V122 - czerwony wykrzyknik przy AKTUALIZACJA tylko gdy jest nowa wersja; usuniety dolny kafel'
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
@@ -637,7 +637,7 @@ def awm_updater_manifest():
 
 @app.get('/api/awm-updater/package.zip')
 def awm_updater_package():
-    wrapper = """# AWM V121 - kafel AKTUALIZACJA w gornym menu
+    wrapper = """# AWM V122 - status aktualizacji w gornym kaflu
 import os, re
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
@@ -648,24 +648,29 @@ for bk in backs:
     gp=bk/'generator_awm.py'
     if gp.is_file():
         cand=gp.read_text(encoding='utf-8')
-        if "questions_tile=_action_tile" in cand and "def check_awm_updates" in cand and "V120 update-box test wrapper" not in cand:
+        if "def check_awm_updates" in cand and "V120 update-box test wrapper" not in cand and "V121 - kafel AKTUALIZACJA" not in cand:
             src=cand
             break
 if src is None:
     raise RuntimeError('Brak pelnego zrodla AWM w kopii bezpieczenstwa.')
-src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]", "APP_VERSION='5.3.121'", src, count=1)
+src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]", "APP_VERSION='5.3.122'", src, count=1)
+# Usun stary dolny kafel aktualizacji, jesli byl dodany przy przycisku Cloud.
+src=re.sub(r"^.*_action_tile\\([^\\n]*['\\\"]AKTUALIZACJA['\\\"][^\\n]*\\)\\s*$","",src,flags=re.M)
+# Dodaj tylko gorny kafel. Czerwony znak jest czescia etykiety stanu i pojawia sie po wykryciu update.
 needle="        close_tile=_action_tile('✕','ZAMKNIJ PROGRAM',self.destroy,1,3)"
 add=needle+"\\n        self.top_update_tile=_action_tile('↻','AKTUALIZACJA',lambda:self.check_awm_updates(True),2,3)"
 if "self.top_update_tile=_action_tile" not in src:
     src=src.replace(needle,add,1)
+# Po wykryciu nowszej wersji pokaz czerwony wykrzyknik po prawej; po braku aktualizacji wyczysc.
+src=src.replace("messagebox.askyesno('Aktualizacja AWM'", "self._awm_update_available=True\\n                try: self.top_update_tile.configure(text='↻  AKTUALIZACJA                         ❗', text_color='#ff2b2b')\\n                except Exception: pass\\n                messagebox.askyesno('Aktualizacja AWM'",1)
 exec(compile(src, str(HERE/'generator_awm.py'), 'exec'), globals(), globals())
 """
     mem=io.BytesIO()
     with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('generator_awm.py',wrapper)
-        z.writestr('AKTUALIZACJA_V121_OK.txt','V121 - KAFEL AKTUALIZACJA W GORNYM MENU')
+        z.writestr('AKTUALIZACJA_V122_OK.txt','V122 - CZERWONY WYKRZYKNIK AKTUALIZACJI')
     mem.seek(0)
-    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V121.zip')
+    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V122.zip')
 
 def _awm_suggestions_sb():
     try:
