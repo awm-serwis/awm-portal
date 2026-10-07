@@ -698,6 +698,20 @@ def awm_updater_suggestions_post():
     with p.open('a',encoding='utf-8') as fh: fh.write(json.dumps(row,ensure_ascii=False)+'\\n')
     return jsonify({'ok':True,'storage':'local-fallback'})
 
+@app.get('/api/awm-updater/suggestions/mine')
+def awm_updater_suggestions_mine():
+    client_id=str(request.args.get('client_id') or '').strip()[:100]
+    if not client_id:
+        return jsonify({'ok':False,'error':'client_id'}),400
+    sb=_awm_suggestions_sb()
+    if not sb:
+        return jsonify({'ok':False,'error':'storage'}),503
+    try:
+        rr=sb.table('awm_suggestions').select('id,text,version,sent_at,received_at,status').eq('client_id',client_id).order('id',desc=True).limit(100).execute()
+        return jsonify({'ok':True,'suggestions':getattr(rr,'data',None) or []})
+    except Exception as ex:
+        return jsonify({'ok':False,'error':str(ex)[:200]}),500
+
 @app.get('/api/awm-updater/suggestions')
 def awm_updater_suggestions_get():
     key=request.args.get('key','')
