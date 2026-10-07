@@ -667,23 +667,46 @@ exec(compile(src, str(HERE/'generator_awm.py'), 'exec'), globals(), globals())
     mem.seek(0)
     return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V121.zip')
 
+def _awm_suggestions_sb():
+    try:
+        import supabase_backend as _sbm
+        return getattr(_sbm,'sb',None)
+    except Exception:
+        return None
+
 @app.post('/api/awm-updater/suggestions')
 def awm_updater_suggestions_post():
     d=request.get_json(silent=True) or {}
     txt=str(d.get('text') or '').strip()
     if not txt: return jsonify({'ok':False,'error':'empty'}),400
+    row={'text':txt[:10000],'version':str(d.get('version') or '')[:50],'computer':str(d.get('computer') or '')[:120],'sent_at':str(d.get('sent_at') or datetime.now().isoformat(timespec='seconds'))[:80],'received_at':datetime.now().isoformat(timespec='seconds'),'status':'NOWA'}
+    sb=_awm_suggestions_sb()
+    if sb:
+        try:
+            sb.table('awm_suggestions').insert(row).execute()
+            return jsonify({'ok':True,'storage':'supabase'})
+        except Exception as ex:
+            # Keep a durable-ish local fallback so a temporary DB problem never loses the task.
+            row['fallback_error']=str(ex)[:300]
     p=DATA/'awm_suggestions.jsonl'
-    row={'text':txt[:10000],'version':str(d.get('version') or '')[:50],'computer':str(d.get('computer') or '')[:120],'sent_at':str(d.get('sent_at') or datetime.now().isoformat(timespec='seconds'))[:80],'received_at':datetime.now().isoformat(timespec='seconds')}
     with p.open('a',encoding='utf-8') as fh: fh.write(json.dumps(row,ensure_ascii=False)+'\\n')
-    return jsonify({'ok':True})
+    return jsonify({'ok':True,'storage':'local-fallback'})
 
 @app.get('/api/awm-updater/suggestions')
 def awm_updater_suggestions_get():
     key=request.args.get('key','')
     if not hmac.compare_digest(key,API_KEY): return jsonify({'ok':False}),403
+    sb=_awm_suggestions_sb()
+    if sb:
+        try:
+            rr=sb.table('awm_suggestions').select('id,text,version,computer,sent_at,received_at,status').order('id',desc=True).limit(200).execute()
+            rows=getattr(rr,'data',None) or []
+            return jsonify({'ok':True,'storage':'supabase','suggestions':rows})
+        except Exception:
+            pass
     p=DATA/'awm_suggestions.jsonl'; rows=[]
     if p.exists():
         for line in p.read_text(encoding='utf-8',errors='ignore').splitlines()[-200:]:
             try: rows.append(json.loads(line))
             except: pass
-    return jsonify({'ok':True,'suggestions':rows})
+    return jsonify({'ok':True,'storage':'local-fallback','suggestions':rows})
