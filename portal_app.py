@@ -1,4 +1,4 @@
-import os, json, sqlite3, secrets, hashlib, hmac, zipfile, tempfile, shutil, subprocess
+import os, json, sqlite3, secrets, hashlib, hmac, zipfile, tempfile, shutil, subprocess, io
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file, session, Response
@@ -617,13 +617,37 @@ if __name__ == '__main__':
 
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = os.getenv('AWM_DESKTOP_VERSION', '5.3.114')
-AWM_DESKTOP_UPDATE_URL = os.getenv('AWM_DESKTOP_UPDATE_URL', '')
-AWM_DESKTOP_UPDATE_NOTES = os.getenv('AWM_DESKTOP_UPDATE_NOTES', 'Aktualizacja PRZEGLAD AWM')
+AWM_DESKTOP_VERSION = '5.3.120'
+AWM_DESKTOP_UPDATE_NOTES = 'TEST BOX AKTUALIZACJI AWM - V120'
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
-    return jsonify({'version':AWM_DESKTOP_VERSION,'download_url':AWM_DESKTOP_UPDATE_URL,'notes':AWM_DESKTOP_UPDATE_NOTES})
+    return jsonify({
+        'version': AWM_DESKTOP_VERSION,
+        'download_url': request.url_root.rstrip('/') + '/api/awm-updater/package.zip',
+        'notes': AWM_DESKTOP_UPDATE_NOTES
+    })
+
+@app.get('/api/awm-updater/package.zip')
+def awm_updater_package():
+    wrapper = """# AWM V120 update-box test wrapper
+import os, re
+from pathlib import Path
+HERE=Path(__file__).resolve().parent
+PARENT=HERE.parent
+backs=sorted(PARENT.glob('AWM_BACKUP_*'), key=lambda p:p.stat().st_mtime, reverse=True)
+if not backs:
+    raise RuntimeError('Brak kopii V119 po aktualizacji.')
+src=(backs[0]/'generator_awm.py').read_text(encoding='utf-8')
+src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]", "APP_VERSION='5.3.120'", src, count=1)
+exec(compile(src, str(backs[0]/'generator_awm.py'), 'exec'), globals(), globals())
+"""
+    mem=io.BytesIO()
+    with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
+        z.writestr('generator_awm.py',wrapper)
+        z.writestr('AKTUALIZACJA_V120_OK.txt','V120 - TEST BOX AKTUALIZACJI AWM')
+    mem.seek(0)
+    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V120.zip')
 
 @app.post('/api/awm-updater/suggestions')
 def awm_updater_suggestions_post():
