@@ -619,8 +619,8 @@ def admin_announcements_delete():
     return jsonify(ok=True,deleted=deleted)
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = '5.3.127'
-AWM_DESKTOP_UPDATE_NOTES = 'V127 - klepsydra przy SUGESTIE do czasu odczytania wiadomości'
+AWM_DESKTOP_VERSION = '5.3.128'
+AWM_DESKTOP_UPDATE_NOTES = 'V128 - wersja naprawcza po V127'
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
@@ -646,7 +646,7 @@ for bk in backs:
         if "def open_awm_suggestions" in cand and "_top_status_tile('HV','SOH Z HV'" in cand:
             src=cand; break
 if src is None: raise RuntimeError('Brak pelnego zrodla AWM.')
-src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]","APP_VERSION='5.3.127'",src,count=1)
+src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]","APP_VERSION='5.3.128'",src,count=1)
 # Zachowaj stabilny uklad z V126.
 src=re.sub(r"\\n        self\\.awm_update_btn=ttk\\.Button\\(quickbar,text='🔄  AKTUALIZACJA'[^\\n]*\\)\\n        self\\.awm_update_btn\\.pack\\([^\\n]*\\)","",src,count=1)
 tile="        _action_tile('💡','SUGESTIE',self.open_awm_suggestions,3,2)"
@@ -661,9 +661,9 @@ exec(compile(src,str(HERE/'generator_awm.py'),'exec'),globals(),globals())
     mem=io.BytesIO()
     with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('generator_awm.py',wrapper)
-        z.writestr('AKTUALIZACJA_V127_OK.txt','V127 - KLEPSYDRA SUGESTII')
+        z.writestr('AKTUALIZACJA_V128_OK.txt','V128 - WERSJA NAPRAWCZA')
     mem.seek(0)
-    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V127.zip')
+    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V128.zip')
 
 def _awm_suggestions_sb():
     try:
