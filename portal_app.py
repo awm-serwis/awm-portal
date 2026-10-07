@@ -624,8 +624,8 @@ if __name__ == '__main__':
 
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = '5.3.120'
-AWM_DESKTOP_UPDATE_NOTES = 'TEST BOX AKTUALIZACJI AWM - V120'
+AWM_DESKTOP_VERSION = '5.3.121'
+AWM_DESKTOP_UPDATE_NOTES = 'V121 - kafel AKTUALIZACJA obok ZAPYTANIA, pod ZAMKNIJ PROGRAM'
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
@@ -637,24 +637,35 @@ def awm_updater_manifest():
 
 @app.get('/api/awm-updater/package.zip')
 def awm_updater_package():
-    wrapper = """# AWM V120 update-box test wrapper
+    wrapper = """# AWM V121 - kafel AKTUALIZACJA w gornym menu
 import os, re
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 PARENT=HERE.parent
 backs=sorted(PARENT.glob('AWM_BACKUP_*'), key=lambda p:p.stat().st_mtime, reverse=True)
-if not backs:
-    raise RuntimeError('Brak kopii V119 po aktualizacji.')
-src=(backs[0]/'generator_awm.py').read_text(encoding='utf-8')
-src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]", "APP_VERSION='5.3.120'", src, count=1)
-exec(compile(src, str(backs[0]/'generator_awm.py'), 'exec'), globals(), globals())
+src=None
+for bk in backs:
+    gp=bk/'generator_awm.py'
+    if gp.is_file():
+        cand=gp.read_text(encoding='utf-8')
+        if "questions_tile=_action_tile" in cand and "def check_awm_updates" in cand and "V120 update-box test wrapper" not in cand:
+            src=cand
+            break
+if src is None:
+    raise RuntimeError('Brak pelnego zrodla AWM w kopii bezpieczenstwa.')
+src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]", "APP_VERSION='5.3.121'", src, count=1)
+needle="        close_tile=_action_tile('✕','ZAMKNIJ PROGRAM',self.destroy,1,3)"
+add=needle+"\\n        self.top_update_tile=_action_tile('↻','AKTUALIZACJA',lambda:self.check_awm_updates(True),2,3)"
+if "self.top_update_tile=_action_tile" not in src:
+    src=src.replace(needle,add,1)
+exec(compile(src, str(HERE/'generator_awm.py'), 'exec'), globals(), globals())
 """
     mem=io.BytesIO()
     with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('generator_awm.py',wrapper)
-        z.writestr('AKTUALIZACJA_V120_OK.txt','V120 - TEST BOX AKTUALIZACJI AWM')
+        z.writestr('AKTUALIZACJA_V121_OK.txt','V121 - KAFEL AKTUALIZACJA W GORNYM MENU')
     mem.seek(0)
-    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V120.zip')
+    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V121.zip')
 
 @app.post('/api/awm-updater/suggestions')
 def awm_updater_suggestions_post():
