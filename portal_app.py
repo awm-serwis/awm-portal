@@ -552,13 +552,22 @@ if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SECRET_KEY'):
 def confirm_vehicle_collected(vehicle_id):
     user=session.get('user')
     if not user: return jsonify(error='Wymagane logowanie'),401
-    con=db()
-    row=con.execute('select id,marka,model,rej,vin from vehicles where (portal_id=? or cast(id as text)=?) and active=1',(vehicle_id,vehicle_id)).fetchone()
-    if not row:
+    if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SECRET_KEY'):
+        from supabase_backend import _vehicle
+        v=_vehicle(vehicle_id)
+        if not v or not v.get('active',True):
+            return jsonify(error='Pojazd nie jest dostępny'),404
+        vehicle_ref=None
+    else:
+        con=db()
+        row=con.execute('select id,marka,model,rej,vin from vehicles where (portal_id=? or cast(id as text)=?) and active=1',(vehicle_id,vehicle_id)).fetchone()
         con.close()
-        return jsonify(error='Pojazd nie jest dostępny'),404
-    msg='POJAZD POBRANY — {} {} | Rejestracja: {} | VIN: {}. Rzeczoznawca potwierdził pobranie dokumentacji. Pojazd można usunąć z publikacji.'.format(row['marka'] or '',row['model'] or '',row['rej'] or 'brak',row['vin'] or 'brak')
-    con.execute('insert into questions(vehicle_id,user,text,created,read) values(?,?,?,?,0)',(row['id'],str(user.get('login') or 'Rzeczoznawca')[:80],msg,datetime.now().isoformat(timespec='minutes')))
+        if not row: return jsonify(error='Pojazd nie jest dostępny'),404
+        v=dict(row)
+        vehicle_ref=v['id']
+    msg='POJAZD POBRANY — {} {} | Rejestracja: {} | VIN: {}. Rzeczoznawca potwierdził pobranie dokumentacji. Pojazd można usunąć z publikacji.'.format(v.get('marka') or '',v.get('model') or '',v.get('rej') or v.get('rejestracja') or 'brak',v.get('vin') or 'brak')
+    con=db()
+    con.execute('insert into questions(vehicle_id,user,text,created,read) values(?,?,?,?,0)',(vehicle_ref,str(user.get('login') or 'Rzeczoznawca')[:80],msg,datetime.now().isoformat(timespec='minutes')))
     con.commit()
     con.close()
     return jsonify(ok=True)
