@@ -548,108 +548,124 @@ if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SECRET_KEY'):
     install_supabase(app)
 
 
+def _persistent_messages():
+    if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SECRET_KEY'):
+        from supabase_backend import sb
+        return sb
+    return None
+
 @app.post('/api/vehicles/<vehicle_id>/collected')
 def confirm_vehicle_collected(vehicle_id):
     user=session.get('user')
     if not user: return jsonify(error='Wymagane logowanie'),401
-    if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SECRET_KEY'):
+    sb=_persistent_messages()
+    if sb:
         from supabase_backend import _vehicle
         v=_vehicle(vehicle_id)
-        if not v or not v.get('active',True):
-            return jsonify(error='Pojazd nie jest dostępny'),404
-        vehicle_ref=None
+        if not v or not v.get('active',True): return jsonify(error='Pojazd nie jest dostępny'),404
+        ref=str(v.get('portal_id') or v.get('id'))
     else:
-        con=db()
-        row=con.execute('select id,marka,model,rej,vin from vehicles where (portal_id=? or cast(id as text)=?) and active=1',(vehicle_id,vehicle_id)).fetchone()
-        con.close()
+        con=db(); row=con.execute('select id,marka,model,rej,vin from vehicles where (portal_id=? or cast(id as text)=?) and active=1',(vehicle_id,vehicle_id)).fetchone(); con.close()
         if not row: return jsonify(error='Pojazd nie jest dostępny'),404
-        v=dict(row)
-        vehicle_ref=v['id']
+        v=dict(row); ref=str(v['id'])
     msg='POJAZD POBRANY — {} {} | Rejestracja: {} | VIN: {}. Rzeczoznawca potwierdził pobranie dokumentacji. Pojazd można usunąć z publikacji.'.format(v.get('marka') or '',v.get('model') or '',v.get('rej') or v.get('rejestracja') or 'brak',v.get('vin') or 'brak')
-    con=db()
-    con.execute('insert into questions(vehicle_id,user,text,created,read) values(?,?,?,?,0)',(vehicle_ref,str(user.get('login') or 'Rzeczoznawca')[:80],msg,datetime.now().isoformat(timespec='minutes')))
-    con.commit()
-    con.close()
+    name=user.get('login','Rzeczoznawca') if isinstance(user,dict) else str(user)
+    created=datetime.now().isoformat(timespec='minutes')
+    if sb: sb.table('portal_questions').insert({'vehicle_id':ref,'user':name[:80],'text':msg,'created':created,'read':0}).execute()
+    else:
+        con=db(); con.execute('insert into questions(vehicle_id,user,text,created,read) values(?,?,?,?,0)',(int(ref),name[:80],msg,created)); con.commit(); con.close()
     return jsonify(ok=True)
 
 @app.post('/api/questions')
 def add_question():
     if 'user' not in session: return jsonify(error='auth'),401
     x=request.get_json(silent=True) or {}
-    text=str(x.get('text','')).strip()
-    if not text: return jsonify(error='Wpisz treść zapytania'),400
-    if len(text)>2000: return jsonify(error='Zapytanie jest za długie'),400
-    con=db()
+    message=str(x.get('text','')).strip()
+    if not message: return jsonify(error='Wpisz treść zapytania'),400
+    if len(message)>2000: return jsonify(error='Zapytanie jest za długie'),400
     name=str(x.get('name','')).strip()[:80] or str(session.get('user',''))
-    con.execute('insert into questions(vehicle_id,user,text,created,read) values(?,?,?,?,0)',(None,name,text,datetime.now().isoformat(timespec='minutes')))
-    con.commit(); con.close()
+    created=datetime.now().isoformat(timespec='minutes')
+    sb=_persistent_messages()
+    if sb: sb.table('portal_questions').insert({'vehicle_id':None,'user':name,'text':message,'created':created,'read':0}).execute()
+    else:
+        con=db(); con.execute('insert into questions(vehicle_id,user,text,created,read) values(?,?,?,?,0)',(None,name,message,created)); con.commit(); con.close()
     return jsonify(ok=True)
 
 @app.get('/api/admin/questions')
 def admin_questions():
     if not api_ok(): return jsonify(error='bad key'),403
-    con=db()
-    rows=con.execute('select q.id,q.user,q.text,q.created,q.read,v.marka,v.model,v.rej,v.vin from questions q left join vehicles v on v.id=q.vehicle_id order by q.id desc limit 200').fetchall()
-    out=[dict(r) for r in rows]
-    unread=sum(1 for r in out if not int(r.get('read') or 0))
-    con.close()
-    return jsonify(questions=out,unread=unread)
+    sb=_persistent_messages()
+    if sb:
+        out=sb.table('portal_questions').select('*').order('id',desc=True).limit(200).execute().data or []
+        for item in out:
+            item.update({'marka':None,'model':None,'rej':None,'vin':None})
+    else:
+        con=db(); out=[dict(r) for r in con.execute('select q.id,q.user,q.text,q.created,q.read,v.marka,v.model,v.rej,v.vin from questions q left join vehicles v on v.id=q.vehicle_id order by q.id desc limit 200')]; con.close()
+    return jsonify(questions=out,unread=sum(1 for r in out if not int(r.get('read') or 0)))
 
 @app.post('/api/admin/questions/read')
 def admin_questions_read():
     if not api_ok(): return jsonify(error='bad key'),403
-    con=db(); con.execute('update questions set read=1 where read=0'); con.commit(); con.close()
+    sb=_persistent_messages()
+    if sb: sb.table('portal_questions').update({'read':1}).eq('read',0).execute()
+    else:
+        con=db(); con.execute('update questions set read=1 where read=0'); con.commit(); con.close()
     return jsonify(ok=True,unread=0)
 
 @app.post('/api/admin/questions/delete')
 def admin_questions_delete():
     if not api_ok(): return jsonify(error='bad key'),403
     x=request.get_json(silent=True) or {}
-    ids=x.get('ids') or []
-    try: ids=[int(i) for i in ids]
+    try: ids=[int(i) for i in (x.get('ids') or [])]
     except: return jsonify(error='bad ids'),400
     if not ids: return jsonify(ok=True,deleted=0)
-    con=db()
-    marks=','.join('?' for _ in ids)
-    cur=con.execute(f'delete from questions where id in ({marks})',ids)
-    con.commit(); deleted=cur.rowcount; con.close()
+    sb=_persistent_messages()
+    if sb: deleted=len(sb.table('portal_questions').delete().in_('id',ids).select('id').execute().data or [])
+    else:
+        con=db(); marks=','.join('?' for _ in ids); cur=con.execute(f'delete from questions where id in ({marks})',ids); con.commit(); deleted=cur.rowcount; con.close()
     return jsonify(ok=True,deleted=deleted)
 
 @app.post('/api/admin/announcements')
 def admin_add_announcement():
     if not api_ok(): return jsonify(error='bad key'),403
-    x=request.get_json(silent=True) or {}; text=str(x.get('text','')).strip()
-    if not text: return jsonify(error='Brak treści'),400
-    if len(text)>3000: return jsonify(error='Informacja jest za długa'),400
-    con=db(); created=datetime.now().isoformat(timespec='minutes')
-    important=1 if x.get('important') else 0
-    con.execute('insert into announcements(text,created,important) values(?,?,?)',(text,created,important)); con.commit(); con.close()
+    x=request.get_json(silent=True) or {}; message=str(x.get('text','')).strip()
+    if not message: return jsonify(error='Brak treści'),400
+    if len(message)>3000: return jsonify(error='Informacja jest za długa'),400
+    created=datetime.now().isoformat(timespec='minutes'); important=1 if x.get('important') else 0
+    sb=_persistent_messages()
+    if sb: sb.table('portal_announcements').insert({'text':message,'created':created,'important':important}).execute()
+    else:
+        con=db(); con.execute('insert into announcements(text,created,important) values(?,?,?)',(message,created,important)); con.commit(); con.close()
     return jsonify(ok=True,created=created)
+
+def _announcements(limit):
+    sb=_persistent_messages()
+    if sb: return sb.table('portal_announcements').select('*').order('id',desc=True).limit(limit).execute().data or []
+    con=db(); out=[dict(r) for r in con.execute('select id,text,created,important from announcements order by id desc limit ?',(limit,))]; con.close(); return out
 
 @app.get('/api/announcements/latest')
 def latest_announcement():
     if 'user' not in session: return jsonify(error='auth'),401
-    con=db(); rows=con.execute('select id,text,created,important from announcements order by id desc limit 20').fetchall(); con.close()
-    out=[dict(r) for r in rows]
+    out=_announcements(20)
     return jsonify(announcements=out,text=(out[0]['text'] if out else ''),created=(out[0]['created'] if out else ''))
 
 @app.get('/api/admin/announcements')
 def admin_announcements():
     if not api_ok(): return jsonify(error='bad key'),403
-    con=db(); rows=con.execute('select id,text,created,important from announcements order by id desc limit 200').fetchall(); con.close()
-    out=[dict(r) for r in rows]
+    out=_announcements(200)
     return jsonify(announcements=out,count=len(out))
 
 @app.post('/api/admin/announcements/delete')
 def admin_announcements_delete():
     if not api_ok(): return jsonify(error='bad key'),403
-    x=request.get_json(silent=True) or {}; ids=x.get('ids') or []
-    try: ids=[int(i) for i in ids]
+    x=request.get_json(silent=True) or {}
+    try: ids=[int(i) for i in (x.get('ids') or [])]
     except: return jsonify(error='bad ids'),400
     if not ids: return jsonify(ok=True,deleted=0)
-    con=db(); marks=','.join('?' for _ in ids)
-    cur=con.execute(f'delete from announcements where id in ({marks})',ids)
-    con.commit(); deleted=cur.rowcount; con.close()
+    sb=_persistent_messages()
+    if sb: deleted=len(sb.table('portal_announcements').delete().in_('id',ids).select('id').execute().data or [])
+    else:
+        con=db(); marks=','.join('?' for _ in ids); cur=con.execute(f'delete from announcements where id in ({marks})',ids); con.commit(); deleted=cur.rowcount; con.close()
     return jsonify(ok=True,deleted=deleted)
 
 # --- AWM desktop updater / suggestions ---
