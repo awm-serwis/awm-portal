@@ -729,16 +729,15 @@ def awm_updater_suggestions_post():
     if not txt: return jsonify({'ok':False,'error':'empty'}),400
     row={'text':txt[:10000],'version':str(d.get('version') or '')[:50],'computer':str(d.get('computer') or '')[:120],'client_id':str(d.get('client_id') or '')[:100],'sent_at':str(d.get('sent_at') or datetime.now().isoformat(timespec='seconds'))[:80],'received_at':datetime.now().isoformat(timespec='seconds'),'status':'NOWA'}
     sb=_awm_suggestions_sb()
-    if sb:
-        try:
-            sb.table('awm_suggestions').insert(row).execute()
-            return jsonify({'ok':True,'storage':'supabase'})
-        except Exception as ex:
-            # Keep a durable-ish local fallback so a temporary DB problem never loses the task.
-            row['fallback_error']=str(ex)[:300]
-    p=DATA/'awm_suggestions.jsonl'
-    with p.open('a',encoding='utf-8') as fh: fh.write(json.dumps(row,ensure_ascii=False)+'\\n')
-    return jsonify({'ok':True,'storage':'local-fallback'})
+    if not sb:
+        return jsonify({'ok':False,'error':'Baza Supabase niedostępna. Sugestia nie została zapisana; spróbuj ponownie.'}),503
+    try:
+        result=sb.table('awm_suggestions').insert(row).execute()
+        if not (getattr(result,'data',None) or []):
+            return jsonify({'ok':False,'error':'Brak potwierdzenia zapisu sugestii w Supabase.'}),503
+        return jsonify({'ok':True,'storage':'supabase'})
+    except Exception:
+        return jsonify({'ok':False,'error':'Błąd zapisu w Supabase. Sugestia nie została zapisana; spróbuj ponownie.'}),503
 
 @app.get('/api/awm-updater/suggestions/mine')
 def awm_updater_suggestions_mine():
