@@ -770,7 +770,7 @@ def awm_updates_publish():
                 if len(code)>4*1024*1024: return jsonify(error='Plik za duży'),400
                 compile(code,name,'exec')
             main=z.read('generator_awm.py').decode('utf-8')
-            if not re.search(r"APP_VERSION\s*=\s*['\\"]"+re.escape(version)+r"['\\"]",main):
+            if not re.search(r'APP_VERSION\s*=\s*[\x27\x22]'+re.escape(version)+r'[\x27\x22]',main):
                 return jsonify(error='Numer wersji w kodzie nie zgadza się z formularzem'),400
     except Exception as ex:
         return jsonify(error='Błędny ZIP: '+str(ex)[:150]),400
