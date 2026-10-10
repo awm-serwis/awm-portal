@@ -753,7 +753,7 @@ def awm_updates_publish():
         return jsonify(error='Brak uprawnień'),403
     import re
     version=str(request.form.get('version','')).strip()
-    if not re.fullmatch(r'[0-9]+\\.[0-9]+\\.[0-9]+',version):
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',version):
         return jsonify(error='Nieprawidłowa wersja'),400
     f=request.files.get('package')
     if not f: return jsonify(error='Brak ZIP'),400
@@ -770,7 +770,7 @@ def awm_updates_publish():
                 if len(code)>4*1024*1024: return jsonify(error='Plik za duży'),400
                 compile(code,name,'exec')
             main=z.read('generator_awm.py').decode('utf-8')
-            if not re.search(r"APP_VERSION\\s*=\\s*['\\\"]"+re.escape(version)+r"['\\\"]",main):
+            if not re.search(r"APP_VERSION\s*=\s*['\\"]"+re.escape(version)+r"['\\"]",main):
                 return jsonify(error='Numer wersji w kodzie nie zgadza się z formularzem'),400
     except Exception as ex:
         return jsonify(error='Błędny ZIP: '+str(ex)[:150]),400
