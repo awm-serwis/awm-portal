@@ -188,6 +188,15 @@ async function openAI(id){
 function closeAI(){document.getElementById('aiModal').classList.remove('on')}
 async function openDoc(id,name,downloadId){let url='/file/'+id;document.getElementById('docTitle').textContent=name||'Podgląd dokumentu';document.getElementById('docDownload').href='/file/'+(downloadId||id)+'?download=1';let frame=document.getElementById('docFrame');let low=String(name||'').toLowerCase();frame.src=low.endsWith('.pdf')?(url+'#page=1&zoom=page-width&view=FitH&toolbar=1'):low.match(/\.(png|jpg|jpeg|webp|gif)$/)?url:'/preview/'+id;document.getElementById('docModal').classList.add('on');try{frame.scrollTop=0;frame.contentWindow&&frame.contentWindow.scrollTo(0,0)}catch(e){}}function closeDoc(){document.getElementById('docModal').classList.remove('on');document.getElementById('docFrame').src='about:blank'}
 let PV=[],PI=0;function openPic(id){let v=V.find(x=>String(x.id)===String(id));PV=(v&&v.photos)||[];if(!PV.length&&v&&v.photo)PV=[v.photo];PI=0;if(PV.length){$('bigpic').src='/file/'+PV[0];$('modal').classList.add('on')}}function stepPic(n,ev){if(ev)ev.stopPropagation();if(!PV.length)return;PI=(PI+n+PV.length)%PV.length;$('bigpic').src='/file/'+PV[PI]}function closePic(ev){if(ev&&ev.target&&ev.target.id==='bigpic')return;$('modal').classList.remove('on');$('bigpic').src=''}document.addEventListener('keydown',e=>{if(!$('modal').classList.contains('on'))return;if(e.key==='Escape')closePic();if(e.key==='ArrowLeft')stepPic(-1);if(e.key==='ArrowRight')stepPic(1)});$('q').oninput=render;boot();
+</script><script>
+fetch('/api/me').then(r=>r.json()).then(d=>{
+ if(d.user && d.user.role==='admin'){
+  const a=document.createElement('a');a.href='/admin/aktualizacje';
+  a.textContent='⬆ AKTUALIZACJE PROGRAMU';
+  a.style.cssText='position:fixed;bottom:14px;right:14px;background:#075e43;color:white;padding:12px;border-radius:9px;z-index:9999;text-decoration:none;font-weight:bold';
+  document.body.appendChild(a);
+ }
+}).catch(()=>{});
 </script></body></html>'''
 
 @app.get('/')
@@ -669,51 +678,124 @@ def admin_announcements_delete():
     return jsonify(ok=True,deleted=deleted)
 
 # --- AWM desktop updater / suggestions ---
-AWM_DESKTOP_VERSION = '5.3.128'
-AWM_DESKTOP_UPDATE_NOTES = 'V128 - wersja naprawcza po V127'
+# Desktop updates are published explicitly from the administrator panel.
+# Keep files in Supabase Storage, not on Render's ephemeral filesystem.
+AWM_UPDATE_BUCKET = 'awm-desktop-updates'
+
+def _awm_update_storage():
+    import supabase_backend as backend
+    client = getattr(backend, 'sb', None)
+    if client is None:
+        raise RuntimeError('Supabase niedostępna')
+    return client.storage.from_(AWM_UPDATE_BUCKET)
+
+def _awm_update_manifest_data():
+    try:
+        payload = _awm_update_storage().download('manifest.json')
+        result = json.loads(payload.decode('utf-8'))
+        if not isinstance(result, dict) or not result.get('sha256'):
+            raise ValueError('Nieprawidłowy manifest')
+        return result
+    except Exception:
+        return None
 
 @app.get('/api/awm-updater/manifest.json')
 def awm_updater_manifest():
+    manifest = _awm_update_manifest_data()
+    if manifest is None:
+        return jsonify({'version':'0.0.0','notes':'Brak opublikowanej aktualizacji'}), 200
     return jsonify({
-        'version': AWM_DESKTOP_VERSION,
+        'version': manifest['version'],
         'download_url': request.url_root.rstrip('/') + '/api/awm-updater/package.zip',
-        'notes': AWM_DESKTOP_UPDATE_NOTES
+        'sha256': manifest['sha256'],
+        'notes': manifest.get('notes','')
     })
 
 @app.get('/api/awm-updater/package.zip')
 def awm_updater_package():
-    wrapper = """# AWM V127 - klepsydra SUGESTIE
-import os, re
-from pathlib import Path
-HERE=Path(__file__).resolve().parent
-PARENT=HERE.parent
-backs=sorted(PARENT.glob('AWM_BACKUP_*'),key=lambda p:p.stat().st_mtime,reverse=True)
-src=None
-for bk in backs:
-    gp=bk/'generator_awm.py'
-    if gp.is_file():
-        cand=gp.read_text(encoding='utf-8')
-        if "def open_awm_suggestions" in cand and "_top_status_tile('HV','SOH Z HV'" in cand:
-            src=cand; break
-if src is None: raise RuntimeError('Brak pelnego zrodla AWM.')
-src=re.sub(r"APP_VERSION\\s*=\\s*['\\\"][^'\\\"]+['\\\"]","APP_VERSION='5.3.128'",src,count=1)
-# Zachowaj stabilny uklad z V126.
-src=re.sub(r"\\n        self\\.awm_update_btn=ttk\\.Button\\(quickbar,text='🔄  AKTUALIZACJA'[^\\n]*\\)\\n        self\\.awm_update_btn\\.pack\\([^\\n]*\\)","",src,count=1)
-tile="        _action_tile('💡','SUGESTIE',self.open_awm_suggestions,3,2)"
-if "self.suggestions_tile=_action_tile" not in src:
-    src=src.replace(tile,"        self.suggestions_tile=_action_tile('💡','SUGESTIE',self.open_awm_suggestions,3,2)",1)
-# Po poprawnym wyslaniu pokaz klepsydre; odczytanie statusu usuwa ja przy nastepnym sprawdzeniu.
-needle="messagebox.showinfo('SUGESTIE'"
-if needle in src and "_awm_suggestion_waiting" not in src:
-    src=src.replace(needle,"self._awm_suggestion_waiting=True\\n                try: self.suggestions_tile.configure(text='💡  SUGESTIE  ⌛')\\n                except Exception: pass\\n                "+needle,1)
-exec(compile(src,str(HERE/'generator_awm.py'),'exec'),globals(),globals())
-"""
-    mem=io.BytesIO()
-    with zipfile.ZipFile(mem,'w',zipfile.ZIP_DEFLATED) as z:
-        z.writestr('generator_awm.py',wrapper)
-        z.writestr('AKTUALIZACJA_V128_OK.txt','V128 - WERSJA NAPRAWCZA')
-    mem.seek(0)
-    return send_file(mem,mimetype='application/zip',as_attachment=True,download_name='AWM_UPDATE_V128.zip')
+    manifest = _awm_update_manifest_data()
+    if not manifest:
+        return jsonify(error='Brak aktualizacji'),404
+    try:
+        payload = _awm_update_storage().download(manifest['path'])
+        if hashlib.sha256(payload).hexdigest() != manifest['sha256']:
+            return jsonify(error='Błędna suma kontrolna'),503
+        return send_file(io.BytesIO(payload),mimetype='application/zip',
+                         as_attachment=True,download_name='AWM_UPDATE_'+manifest['version']+'.zip')
+    except Exception:
+        return jsonify(error='Paczka niedostępna'),503
+
+@app.route('/admin/aktualizacje', methods=['GET'])
+def awm_updates_panel():
+    if (session.get('user') or {}).get('role') != 'admin':
+        return Response('Zaloguj się jako administrator AWM.',status=403)
+    page = """<!doctype html><html lang="pl"><meta charset="utf-8"><title>AWM Aktualizacje</title>
+    <style>body{font:16px Arial;background:#eef5f2;color:#153d30;max-width:680px;margin:45px auto;padding:20px}
+    main{background:white;padding:26px;border-radius:14px}button{padding:12px 22px;background:#076e4b;color:white;border:0;border-radius:7px;cursor:pointer}
+    input,textarea{margin:8px 0 20px;padding:10px;width:95%}small{color:#555}</style>
+    <main><h2>AWM — AKTUALIZACJE PROGRAMU</h2>
+    <p>Publikacja poprawki dla PRZEGLĄD AWM. Tylko pliki kodu; archiwa nie są modyfikowane.</p>
+    <form id="f"><label>Numer wersji</label><input name="version" value="5.3.148" required pattern="[0-9]+\\.[0-9]+\\.[0-9]+">
+    <label>Paczka aktualizacji ZIP</label><input name="package" type="file" accept=".zip" required>
+    <label>Opis zmian</label><textarea name="notes" rows="3">Materiały 5W30 i raport miesięczny</textarea>
+    <button type="submit">PUBLIKUJ AKTUALIZACJĘ</button></form>
+    <p id="msg"></p><p><a href="/">Powrót do portalu</a></p></main>
+    <script>document.getElementById('f').onsubmit=async(e)=>{
+      e.preventDefault();const m=document.getElementById('msg');m.textContent='Wysyłanie i weryfikacja...';
+      try{const r=await fetch('/api/admin/awm-updater/publish',{method:'POST',body:new FormData(e.target)});
+      const d=await r.json();m.textContent=d.ok?'Opublikowano '+d.version+' — SHA-256: '+d.sha256:(d.error||'Błąd publikacji');}
+      catch(ex){m.textContent='Błąd połączenia: '+ex.message;}};</script></html>"""
+    return Response(page,mimetype='text/html')
+
+@app.post('/api/admin/awm-updater/publish')
+def awm_updates_publish():
+    if (session.get('user') or {}).get('role') != 'admin':
+        return jsonify(error='Brak uprawnień'),403
+    import re
+    version=str(request.form.get('version','')).strip()
+    if not re.fullmatch(r'[0-9]+\\.[0-9]+\\.[0-9]+',version):
+        return jsonify(error='Nieprawidłowa wersja'),400
+    f=request.files.get('package')
+    if not f: return jsonify(error='Brak ZIP'),400
+    payload=f.read(5*1024*1024+1)
+    if len(payload)>5*1024*1024: return jsonify(error='Paczka za duża'),413
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as z:
+            names=z.namelist()
+            allowed={'generator_awm.py','awm_safe_updater.py'}
+            if set(names)!=allowed or len(names)!=2 or z.testzip() is not None:
+                return jsonify(error='ZIP musi zawierać dokładnie generator_awm.py i awm_safe_updater.py'),400
+            for name in allowed:
+                code=z.read(name)
+                if len(code)>4*1024*1024: return jsonify(error='Plik za duży'),400
+                compile(code,name,'exec')
+            main=z.read('generator_awm.py').decode('utf-8')
+            if not re.search(r"APP_VERSION\\s*=\\s*['\\\"]"+re.escape(version)+r"['\\\"]",main):
+                return jsonify(error='Numer wersji w kodzie nie zgadza się z formularzem'),400
+    except Exception as ex:
+        return jsonify(error='Błędny ZIP: '+str(ex)[:150]),400
+    digest=hashlib.sha256(payload).hexdigest()
+    path='packages/'+version.replace('.','_')+'_'+digest[:16]+'.zip'
+    manifest={'version':version,'sha256':digest,'path':path,
+              'notes':str(request.form.get('notes',''))[:500]}
+    try:
+        import supabase_backend as backend
+        sb=getattr(backend,'sb',None)
+        if sb is None: raise RuntimeError('Supabase niedostępna')
+        try: sb.storage.create_bucket(AWM_UPDATE_BUCKET,options={'public':False})
+        except Exception: pass
+        storage=sb.storage.from_(AWM_UPDATE_BUCKET)
+        storage.upload(path,payload,{'content-type':'application/zip'})
+        check=storage.download(path)
+        if hashlib.sha256(check).hexdigest()!=digest:
+            raise RuntimeError('Niepowodzenie kontroli SHA-256 na serwerze')
+        # Manifest is published LAST, after the full ZIP has been verified.
+        manifest_bytes=json.dumps(manifest,ensure_ascii=False).encode('utf-8')
+        storage.upload('manifest.json',manifest_bytes,
+                       {'content-type':'application/json','upsert':'true'})
+        return jsonify(ok=True,version=version,sha256=digest)
+    except Exception as ex:
+        return jsonify(error='Publikacja nieudana: '+str(ex)[:180]),503
 
 def _awm_suggestions_sb():
     try:
