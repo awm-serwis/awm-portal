@@ -892,8 +892,8 @@ def awm_workshop_questions():
 def awm_workshop_receive_once():
     """Jednorazowy odbiór: pobranie i usunięcie zgłoszeń WARSZTAT."""
     user=session.get('user')
-    if not user or user.get('role')!='admin':
-        return jsonify(error='Wymagane uprawnienia administratora'),403
+    if not api_ok() and (not user or user.get('role')!='admin'):
+        return jsonify(error='Wymagane uprawnienia administratora lub klucz API'),403
     sb=_persistent_messages()
     if sb:
         # Supabase REST nie daje transakcyjnego RETURNING przez tę bibliotekę.
