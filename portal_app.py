@@ -188,15 +188,6 @@ async function openAI(id){
 function closeAI(){document.getElementById('aiModal').classList.remove('on')}
 async function openDoc(id,name,downloadId){let url='/file/'+id;document.getElementById('docTitle').textContent=name||'Podgląd dokumentu';document.getElementById('docDownload').href='/file/'+(downloadId||id)+'?download=1';let frame=document.getElementById('docFrame');let low=String(name||'').toLowerCase();frame.src=low.endsWith('.pdf')?(url+'#page=1&zoom=page-width&view=FitH&toolbar=1'):low.match(/\.(png|jpg|jpeg|webp|gif)$/)?url:'/preview/'+id;document.getElementById('docModal').classList.add('on');try{frame.scrollTop=0;frame.contentWindow&&frame.contentWindow.scrollTo(0,0)}catch(e){}}function closeDoc(){document.getElementById('docModal').classList.remove('on');document.getElementById('docFrame').src='about:blank'}
 let PV=[],PI=0;function openPic(id){let v=V.find(x=>String(x.id)===String(id));PV=(v&&v.photos)||[];if(!PV.length&&v&&v.photo)PV=[v.photo];PI=0;if(PV.length){$('bigpic').src='/file/'+PV[0];$('modal').classList.add('on')}}function stepPic(n,ev){if(ev)ev.stopPropagation();if(!PV.length)return;PI=(PI+n+PV.length)%PV.length;$('bigpic').src='/file/'+PV[PI]}function closePic(ev){if(ev&&ev.target&&ev.target.id==='bigpic')return;$('modal').classList.remove('on');$('bigpic').src=''}document.addEventListener('keydown',e=>{if(!$('modal').classList.contains('on'))return;if(e.key==='Escape')closePic();if(e.key==='ArrowLeft')stepPic(-1);if(e.key==='ArrowRight')stepPic(1)});$('q').oninput=render;boot();
-</script><script>
-fetch('/api/me').then(r=>r.json()).then(d=>{
- if(d.user && d.user.role==='admin'){
-  const a=document.createElement('a');a.href='/admin/aktualizacje';
-  a.textContent='⬆ AKTUALIZACJE PROGRAMU';
-  a.style.cssText='position:fixed;bottom:14px;right:14px;background:#075e43;color:white;padding:12px;border-radius:9px;z-index:9999;text-decoration:none;font-weight:bold';
-  document.body.appendChild(a);
- }
-}).catch(()=>{});
 </script></body></html>'''
 
 @app.get('/')
