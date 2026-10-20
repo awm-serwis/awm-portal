@@ -877,12 +877,18 @@ WORKSHOP_PAGE = r'''<!doctype html><html lang="pl"><head><meta charset="utf-8"><
 @media(max-width:850px){.awm-preview .vehicle-card{grid-template-columns:210px 1fr}.awm-preview .side{grid-column:1/-1;border-left:0;border-top:1px solid #e0eae3;flex-direction:row;justify-content:space-between;align-items:center}.awm-preview .timeline{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:570px){.awm-preview .vehicle-card{grid-template-columns:1fr}.awm-preview .car-photo{min-height:145px}.awm-preview .accordions{grid-template-columns:1fr}.awm-preview .timeline{grid-template-columns:repeat(2,1fr)}.awm-preview .side{flex-wrap:wrap}}
 </style>
+<style>.awm-preview .vehicle-card{display:grid;grid-template-columns:150px minmax(0,1fr) 130px;min-height:114px;align-items:stretch}
+.awm-preview .car-photo{min-height:114px;border-radius:0;gap:2px}.awm-preview .car-photo span{font-size:43px}.awm-preview .car-photo strong{font-size:12px}.awm-preview .car-photo small{font-size:9px;text-align:center}
+.awm-preview .vehicle-info{padding:11px 18px;display:flex;flex-direction:column;justify-content:center}.awm-preview .vehicle-info h2{font-size:17px;margin-bottom:2px}.awm-preview .vehicle-info p{font-size:12px;margin:3px 0}.awm-preview .side{padding:12px;gap:7px;align-items:stretch}.awm-preview .side strong{font-size:16px;text-align:center}.awm-preview .side button{font-size:12px}
+.awm-preview #repairDetailArea[hidden]{display:none!important}
+@media(max-width:650px){.awm-preview .vehicle-card{grid-template-columns:105px minmax(0,1fr)}.awm-preview .side{grid-column:1/-1;display:flex;flex-direction:row;justify-content:flex-end}.awm-preview .vehicle-info{padding:10px}.awm-preview .vehicle-info h2{font-size:15px}}
+</style>
 <section class="awm-preview" id="repairPreview" aria-label="Podgląd karty naprawy">
-<div class="preview-head"><div><h1>🚘 Pojazdy w warsztacie</h1><div class="muted">Podgląd nowego układu strony i szczegółów naprawy</div></div><span class="tag">WERSJA POKAZOWA · BEZ DANYCH KLIENTÓW</span></div>
+<div class="preview-head"><div><h1>🚘 Pojazdy w warsztacie</h1><div class="muted">Pojazdy w naprawie — układ poziomy</div></div><span class="tag">WERSJA POKAZOWA · BEZ DANYCH KLIENTÓW</span></div>
 <article class="vehicle-card"><div class="car-photo"><span aria-hidden="true">🚙</span><strong>Volkswagen Golf</strong><small>Podgląd — miejsce na rzeczywiste zdjęcie pojazdu</small></div>
 <div class="vehicle-info"><h2>Volkswagen Golf <span class="muted">· przykład</span></h2><p>Model: 2.0 TDI · Rok: 2020</p><p>Rejestracja: <strong>DEMO 2026</strong> · VIN: ukryty w wersji pokazowej</p><p>Przyjęcie: 20.10.2026 · Termin: 28.10.2026</p><span style="display:inline-block;background:#d8f6e5;padding:6px 11px;border-radius:20px;color:#006d43;font-size:12px;font-weight:800">● W naprawie</span></div>
-<div class="side"><strong>🔐 Szczegóły pojazdu</strong><small>PIN klienta zostanie podłączony po uruchomieniu kart zleceń.</small><button type="button" onclick="document.getElementById('repairSections').scrollIntoView({behavior:'smooth',block:'start'})">Pokaż szczegóły ↓</button></div></article>
-<div class="timeline" aria-label="Etapy naprawy">
+<div class="side"><strong>🔒 PIN</strong><button id="showRepairDetails" type="button" aria-expanded="false" aria-controls="repairDetailArea" onclick="const d=document.getElementById('repairDetailArea');const open=d.hidden;d.hidden=!open;this.setAttribute('aria-expanded',String(open));this.textContent=open?'Ukryj szczegóły ↑':'Szczegóły ↓'">Szczegóły ↓</button></div></article>
+<div id="repairDetailArea" hidden><div class="timeline" aria-label="Etapy naprawy">
 <div class="step on"><b>✔</b>Przyjęty do warsztatu</div><div class="step on"><b>🔧</b>W naprawie</div><div class="step"><b>📦</b>Oczekuje na części</div><div class="step"><b>✍</b>Zgoda na naprawę</div><div class="step"><b>🚗</b>Gotowy do wydania</div><div class="step"><b>🏁</b>Wydany klientowi</div>
 </div>
 <div class="section-head" id="repairSections"><h2>Szczegóły zlecenia</h2><span class="muted">Kliknij kafelek, aby rozwinąć lub zwinąć</span></div>
@@ -895,7 +901,7 @@ WORKSHOP_PAGE = r'''<!doctype html><html lang="pl"><head><meta charset="utf-8"><
 <details><summary>📅 Terminy naprawy</summary><div class="inner">Przyjęcie: 20.10.2026<br>Planowane zakończenie: 28.10.2026</div></details>
 <details><summary>✅ Zgody i akceptacje</summary><div class="inner">Miejsce na potwierdzenie zakresu naprawy i zaakceptowanego kosztu. <em>W podglądzie żadna zgoda nie jest zapisywana.</em></div></details>
 <details><summary>📝 Notatki warsztatu</summary><div class="inner">Sekcja wewnętrzna, niewidoczna dla klienta po wdrożeniu jego dostępu.</div></details>
-</div><p class="demo-note">To interaktywny podgląd wyglądu. Nie zapisuje zmian, nie weryfikuje PIN-ów i nie wyświetla prawdziwych zleceń. Rejestrator głosowy jest dostępny na górnym pasku.</p>
+</div></div><p class="demo-note">To interaktywny podgląd wyglądu. Nie zapisuje zmian, nie weryfikuje PIN-ów i nie wyświetla prawdziwych zleceń. Rejestrator głosowy jest dostępny na górnym pasku.</p>
 </section>
 <div class="voice-overlay hidden" id="voiceModal" role="dialog" aria-modal="true" aria-label="Głosowy rejestrator zlecenia"><section class="panel voice-dialog" id="voiceCard" style="text-align:center;border:1px solid #b8dec9"><button type="button" class="voice-close" id="voiceClose" aria-label="Zminimalizuj rejestrator" title="Zminimalizuj rejestrator">×</button>
 <h2>🎙 GŁOSOWY REJESTRATOR ZLECENIA</h2><p>Dyktuj opis zlecenia, popraw tekst i wyślij do warsztatu.</p>
