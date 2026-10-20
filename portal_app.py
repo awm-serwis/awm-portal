@@ -855,7 +855,7 @@ WORKSHOP_PAGE = r'''<!doctype html><html lang="pl"><head><meta charset="utf-8"><
 <section class="panel" id="voiceCard" style="text-align:center;border:1px solid #b8dec9">
 <h2>🎙 GŁOSOWY REJESTRATOR ZLECENIA</h2><p>Dyktuj opis zlecenia, popraw tekst i wyślij do warsztatu.</p>
 <div id="voiceGate"><label for="voicePin">PIN dostępu</label><input id="voicePin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" style="max-width:190px;text-align:center;font-size:23px;letter-spacing:8px"><button class="btn" type="button" id="voiceUnlock">ODBLOKUJ</button></div>
-<div id="voiceEditor" class="hidden"><p id="voiceStatus" role="status">Gotowy do dyktowania.</p><button class="btn" type="button" id="voiceStart">🎤 ROZPOCZNIJ DYKTOWANIE</button> <button class="btn" type="button" id="voiceStop" disabled>ZATRZYMAJ</button><label for="voiceText" style="text-align:left;margin-top:18px">Treść zlecenia (możesz poprawić ręcznie)</label><textarea id="voiceText" maxlength="5000" style="min-height:220px" placeholder="Tutaj pojawi się rozpoznany tekst..."></textarea><button class="btn" type="button" id="voiceSend">WYŚLIJ ZLECENIE</button></div><p id="voiceMessage" role="status"></p>
+<div id="voiceEditor" class="hidden"><p id="voiceStatus" role="status">Gotowy do dyktowania.</p><button class="btn" type="button" id="voiceStart">🎤 ROZPOCZNIJ DYKTOWANIE</button> <button class="btn" type="button" id="voiceStop" disabled>ZATRZYMAJ</button><label for="voiceText" style="text-align:left;margin-top:18px">Treść zlecenia (możesz poprawić ręcznie)</label><textarea id="voiceText" maxlength="5000" style="min-height:220px" placeholder="Tutaj pojawi się rozpoznany tekst..."></textarea><button class="btn" type="button" id="voiceSend">WYŚLIJ DO PROGRAMU</button></div><p id="voiceMessage" role="status"></p>
 </section>
 <section class="panel hidden" id="formPanel"><h2>Wiadomość testowa do warsztatu</h2><form id="workshopForm"><div><label for="testMessage">Treść wiadomości testowej *</label><textarea id="testMessage" name="opis" required maxlength="1800" style="min-height:250px;width:100%" placeholder="Wpisz tutaj całą wiadomość testową..."></textarea><p style="font-size:12px;color:#61746a">Nie podawaj imienia, nazwiska, telefonu, adresu e-mail, numeru VIN ani innych danych osobowych w opisie. Treść zapytania jest przechowywana do pierwszego otwarcia skrzynki przez administratora. Podczas pobrania zostaje usunięta z bazy; nie jest archiwizowana przez moduł WARSZTAT. Nie wpisuj danych osobowych.</p><button class="btn" type="submit" id="send">WYŚLIJ WIADOMOŚĆ TESTOWĄ</button><div id="result" role="status"></div></form></section>
 <section class="panel hidden" id="requestsPanel"><h2>Zapytania do warsztatu</h2><p>Zapytania są pobierane jednorazowo i usuwane z bazy przy otwarciu tej strony. Po odświeżeniu nie będzie można ich odzyskać. Nie są archiwizowane przez moduł WARSZTAT.</p><div id="requestItems">Ładowanie…</div></section></main>
@@ -870,7 +870,7 @@ let voiceRecognition=null,voiceUnlocked=false,voiceBase='';
 $('voiceUnlock').addEventListener('click',async()=>{let pin=$('voicePin').value;$('voiceMessage').textContent='Sprawdzanie…';try{await api('/api/warsztat/voice/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});voiceUnlocked=true;$('voiceGate').classList.add('hidden');$('voiceEditor').classList.remove('hidden');$('voicePin').value='';$('voiceMessage').textContent='Dostęp przyznany.'}catch(e){$('voiceMessage').textContent=e.message}});
 $('voiceStart').addEventListener('click',()=>{if(!voiceUnlocked)return;let R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R){$('voiceStatus').textContent='Ta przeglądarka nie obsługuje rozpoznawania mowy. Możesz wpisać tekst ręcznie lub użyć dyktowania z klawiatury.';return}if(voiceRecognition)return;voiceBase=$('voiceText').value.trim();let rec=new R();voiceRecognition=rec;rec.lang='pl-PL';rec.continuous=true;rec.interimResults=true;rec.onresult=e=>{let finalText='',interim='';for(let i=0;i<e.results.length;i++){let t=e.results[i][0].transcript;if(e.results[i].isFinal)finalText+=t+' ';else interim+=t} $('voiceText').value=[voiceBase,finalText.trim(),interim.trim()].filter(Boolean).join(' ').slice(0,5000)};rec.onerror=e=>{$('voiceStatus').textContent='Mikrofon: '+e.error};rec.onend=()=>{voiceRecognition=null;$('voiceStart').disabled=false;$('voiceStop').disabled=true};try{rec.start();$('voiceStart').disabled=true;$('voiceStop').disabled=false;$('voiceStatus').textContent='Słucham…'}catch(e){voiceRecognition=null;$('voiceStatus').textContent=e.message}});
 $('voiceStop').addEventListener('click',()=>{if(voiceRecognition)voiceRecognition.stop()});
-$('voiceSend').addEventListener('click',async()=>{let t=$('voiceText').value.trim();if(!t){$('voiceMessage').textContent='Najpierw wpisz lub podyktuj treść.';return}if(voiceRecognition)voiceRecognition.stop();$('voiceSend').disabled=true;try{await api('/api/warsztat/voice/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});$('voiceMessage').textContent='Zlecenie wysłane do zapytań warsztatu.';$('voiceText').value=''}catch(e){$('voiceMessage').textContent=e.message}finally{$('voiceSend').disabled=false}});
+$('voiceSend').addEventListener('click',async()=>{let t=$('voiceText').value.trim();if(!t){$('voiceMessage').textContent='Najpierw wpisz lub podyktuj treść.';return}if(voiceRecognition)voiceRecognition.stop();$('voiceSend').disabled=true;try{await api('/api/warsztat/voice/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});$('voiceMessage').textContent='Opis wysłany do programu AWM.';$('voiceText').value=''}catch(e){$('voiceMessage').textContent=e.message}finally{$('voiceSend').disabled=false}});
 
 init();
 </script></body></html>'''
@@ -936,7 +936,7 @@ def awm_voice_submit():
     if not message or len(message)>5000:
         return jsonify(error='Treść musi mieć od 1 do 5000 znaków.'),400
     created=datetime.now().isoformat(timespec='seconds')
-    row={'user':'Głosowy rejestrator zlecenia','text':VOICE_PREFIX+'\\n'+message,'created':created,'read':0}
+    row={'user':'Głosowy rejestrator zlecenia','text':VOICE_PREFIX+'\n'+message,'created':created,'read':0}
     try:
         sb=_persistent_messages()
         if sb:
@@ -955,6 +955,12 @@ def awm_voice_submit():
 # R21: text-only voice inbox shared by portal and desktop AWM.
 VOICE_PREFIX='[AWM WARSZTAT] [ZLECENIE GŁOSOWE]'
 
+def _voice_inbox_authorized():
+    voice_key=os.getenv('AWM_VOICE_PIN_KEY','')
+    supplied=request.headers.get('X-AWM-Voice-Key','')
+    voice_ok=bool(voice_key) and hmac.compare_digest(supplied,voice_key)
+    return voice_ok or (API_KEY != 'AWM-CHANGE-ME' and api_ok())
+
 def _voice_rows():
     sb=_persistent_messages()
     if sb:
@@ -967,11 +973,11 @@ def _voice_rows():
 
 def _voice_plain(row):
     text=str(row.get('text') or '')
-    return {'id':row['id'],'created':row.get('created',''),'text':text[len(VOICE_PREFIX):].lstrip('\\n ')}
+    return {'id':row['id'],'created':row.get('created',''),'text':text[len(VOICE_PREFIX):].removeprefix('\\n').lstrip('\n ')}
 
 @app.route('/api/admin/voice-notes',methods=['GET','DELETE'])
 def awm_admin_voice_notes():
-    if not api_ok(): return jsonify(error='Brak autoryzacji AWM'),403
+    if not _voice_inbox_authorized(): return jsonify(error='Brak autoryzacji AWM'),403
     if request.method=='GET':
         try:
             notes=[_voice_plain(r) for r in _voice_rows()]
@@ -998,14 +1004,14 @@ def awm_admin_voice_notes():
 
 @app.patch('/api/admin/voice-notes/<int:note_id>')
 def awm_admin_voice_note_edit(note_id):
-    if not api_ok(): return jsonify(error='Brak autoryzacji AWM'),403
+    if not _voice_inbox_authorized(): return jsonify(error='Brak autoryzacji AWM'),403
     text=str((request.get_json(silent=True) or {}).get('text') or '').strip()
     if not text or len(text)>5000: return jsonify(error='Opis musi mieć od 1 do 5000 znaków'),400
     try:
         if note_id not in {int(r['id']) for r in _voice_rows()}:
             return jsonify(error='Nie znaleziono zgłoszenia'),404
         sb=_persistent_messages()
-        if sb: sb.table('portal_questions').update({'text':VOICE_PREFIX+'\\n'+text}).eq('id',note_id).execute()
+        if sb: sb.table('portal_questions').update({'text':VOICE_PREFIX+'\n'+text}).eq('id',note_id).execute()
         else:
             con=db()
             try:
