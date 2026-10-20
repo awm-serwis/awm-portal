@@ -935,14 +935,85 @@ def awm_voice_submit():
     message=str(payload.get('text','')).strip()
     if not message or len(message)>5000:
         return jsonify(error='Treść musi mieć od 1 do 5000 znaków.'),400
-    c=db()
+    created=datetime.now().isoformat(timespec='seconds')
+    row={'user':'Głosowy rejestrator zlecenia','text':VOICE_PREFIX+'\\n'+message,'created':created,'read':0}
     try:
-        c.execute('INSERT INTO questions(vehicle_id,user,text,created) VALUES(?,?,?,?)',
-                  (None,'Głosowy rejestrator zlecenia','[AWM WARSZTAT] [ZLECENIE GŁOSOWE]\\n'+message,datetime.now().isoformat(timespec='seconds')))
-        c.commit()
-    finally:
-        c.close()
+        sb=_persistent_messages()
+        if sb:
+            sb.table('portal_questions').insert(row).execute()
+        else:
+            c=db()
+            try:
+                c.execute('INSERT INTO questions(vehicle_id,user,text,created) VALUES(?,?,?,?)',(None,row['user'],row['text'],created))
+                c.commit()
+            finally: c.close()
+    except Exception:
+        return jsonify(error='Nie udało się zapisać opisu. Spróbuj ponownie.'),503
     return jsonify(ok=True)
+
+
+# R21: text-only voice inbox shared by portal and desktop AWM.
+VOICE_PREFIX='[AWM WARSZTAT] [ZLECENIE GŁOSOWE]'
+
+def _voice_rows():
+    sb=_persistent_messages()
+    if sb:
+        result=sb.table('portal_questions').select('id,text,created').order('id',desc=True).limit(500).execute()
+        return [dict(r) for r in (result.data or []) if str(r.get('text') or '').startswith(VOICE_PREFIX)]
+    con=db()
+    try:
+        return [dict(r) for r in con.execute("SELECT id,text,created FROM questions WHERE text LIKE ? ORDER BY id DESC LIMIT 500",(VOICE_PREFIX+'%',))]
+    finally: con.close()
+
+def _voice_plain(row):
+    text=str(row.get('text') or '')
+    return {'id':row['id'],'created':row.get('created',''),'text':text[len(VOICE_PREFIX):].lstrip('\\n ')}
+
+@app.route('/api/admin/voice-notes',methods=['GET','DELETE'])
+def awm_admin_voice_notes():
+    if not api_ok(): return jsonify(error='Brak autoryzacji AWM'),403
+    if request.method=='GET':
+        try:
+            notes=[_voice_plain(r) for r in _voice_rows()]
+            return jsonify(ok=True,notes=notes,count=len(notes))
+        except Exception: return jsonify(error='Nie udało się pobrać zgłoszeń'),503
+    data=request.get_json(silent=True) or {}
+    try: ids=list(dict.fromkeys(int(i) for i in data.get('ids',[])))
+    except (TypeError,ValueError): return jsonify(error='Nieprawidłowe identyfikatory'),400
+    if len(ids)>500: return jsonify(error='Zbyt wiele zgłoszeń'),400
+    try:
+        existing={int(r['id']) for r in _voice_rows()}
+        ids=[i for i in ids if i in existing]
+        if not ids: return jsonify(ok=True,deleted=0)
+        sb=_persistent_messages()
+        if sb: sb.table('portal_questions').delete().in_('id',ids).execute()
+        else:
+            con=db()
+            try:
+                con.execute('DELETE FROM questions WHERE id IN ('+','.join('?'*len(ids))+')',ids)
+                con.commit()
+            finally: con.close()
+        return jsonify(ok=True,deleted=len(ids))
+    except Exception: return jsonify(error='Nie udało się usunąć zgłoszeń'),503
+
+@app.patch('/api/admin/voice-notes/<int:note_id>')
+def awm_admin_voice_note_edit(note_id):
+    if not api_ok(): return jsonify(error='Brak autoryzacji AWM'),403
+    text=str((request.get_json(silent=True) or {}).get('text') or '').strip()
+    if not text or len(text)>5000: return jsonify(error='Opis musi mieć od 1 do 5000 znaków'),400
+    try:
+        if note_id not in {int(r['id']) for r in _voice_rows()}:
+            return jsonify(error='Nie znaleziono zgłoszenia'),404
+        sb=_persistent_messages()
+        if sb: sb.table('portal_questions').update({'text':VOICE_PREFIX+'\\n'+text}).eq('id',note_id).execute()
+        else:
+            con=db()
+            try:
+                con.execute('UPDATE questions SET text=? WHERE id=?',(VOICE_PREFIX+'\\n'+text,note_id))
+                con.commit()
+            finally: con.close()
+        return jsonify(ok=True)
+    except Exception: return jsonify(error='Nie udało się zapisać opisu'),503
 
 @app.get('/warsztat')
 @app.get('/warsztat/zapytania')
