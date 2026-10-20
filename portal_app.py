@@ -542,6 +542,11 @@ def publish():
     except Exception as ex: return jsonify(error=str(ex)),400
     finally: shutil.rmtree(td,ignore_errors=True)
 
+# Workshop R42 bridge — isolated from existing inspection routes.
+if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SECRET_KEY'):
+    from workshop_bridge import install as install_workshop_bridge
+    install_workshop_bridge(app)
+
 # Persistent Supabase backend (enabled only when configured on the host)
 if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SECRET_KEY'):
     from supabase_backend import install_supabase
