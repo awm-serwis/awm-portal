@@ -62,6 +62,20 @@ def install(app):
             return jsonify(ok=True,id=str(saved))
         except Exception:
             return err('Nie udało się zapisać zlecenia na platformie',503)
+    @app.delete('/api/admin/workshop/cases/<uuid:cid>')
+    def awm_workshop_unpublish_r45(cid):
+        if not api():return err('Brak autoryzacji programu AWM',403)
+        try:
+            rows=sb.table('awm_workshop_cases').select('id,photo_path').eq('id',str(cid)).eq('source','AWM WARSZTAT').limit(1).execute().data or []
+            if not rows:return err('Nie znaleziono publikacji',404)
+            sb.table('awm_workshop_cases').delete().eq('id',str(cid)).eq('source','AWM WARSZTAT').execute()
+            # Retain storage image if deletion fails; do not re-expose vehicle on partial failure.
+            photo=rows[0].get('photo_path')
+            if photo:
+                try:sb.storage.from_(BUCKET).remove([photo])
+                except Exception:pass
+            return jsonify(ok=True,deleted=True)
+        except Exception:return err('Nie udało się usunąć publikacji',503)
     @app.get('/api/warsztat/cases')
     def awm_workshop_list_r42():
         if not admin():return err('Wymagane uprawnienia warsztatu',403)
