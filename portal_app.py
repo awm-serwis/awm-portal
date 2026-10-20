@@ -876,6 +876,23 @@ init();
 </script></body></html>'''
 
 
+@app.post('/api/admin/voice-pin')
+def awm_admin_voice_pin():
+    if API_KEY == 'AWM-CHANGE-ME' or not api_ok():
+        return jsonify(error='Brak autoryzacji AWM'),403
+    payload=request.get_json(silent=True) or {}
+    pin=str(payload.get('pin',''))
+    if not (4<=len(pin)<=8 and pin.isascii() and pin.isdigit()):
+        return jsonify(error='PIN musi mieć od 4 do 8 cyfr.'),400
+    c=db()
+    try:
+        c.execute('CREATE TABLE IF NOT EXISTS portal_settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)')
+        c.execute('INSERT OR REPLACE INTO portal_settings(name,value) VALUES(?,?)',('voice_pin_hash',ph(pin)))
+        c.commit()
+    finally:
+        c.close()
+    return jsonify(ok=True)
+
 @app.post('/api/warsztat/voice/unlock')
 def awm_voice_unlock():
     import time
@@ -886,11 +903,18 @@ def awm_voice_unlock():
         return jsonify(error='Zbyt wiele prób. Spróbuj ponownie za 15 minut.'),429
     payload=request.get_json(silent=True) or {}
     pin=str(payload.get('pin',''))
-    # Ustaw AWM_WORKSHOP_PIN w zmiennych środowiskowych Render; nie zapisuj PIN-u w repozytorium.
-    expected=os.getenv('AWM_WORKSHOP_PIN','')
-    if not expected:
-        return jsonify(error='Administrator musi skonfigurować AWM_WORKSHOP_PIN na serwerze.'),503
-    if not (len(pin)==4 and pin.isdigit() and hmac.compare_digest(pin,expected)):
+    c=db()
+    try:
+        c.execute('CREATE TABLE IF NOT EXISTS portal_settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)')
+        row=c.execute('SELECT value FROM portal_settings WHERE name=?',('voice_pin_hash',)).fetchone()
+    finally:
+        c.close()
+    stored=row['value'] if row else ''
+    fallback=os.getenv('AWM_WORKSHOP_PIN','')
+    if not stored and not fallback:
+        return jsonify(error='Ustaw PIN w programie AWM i kliknij ZAPISZ PIN.'),503
+    valid=(4<=len(pin)<=8 and pin.isascii() and pin.isdigit() and (okp(pin,stored) if stored else hmac.compare_digest(pin,fallback)))
+    if not valid:
         attempts.append(now)
         session['voice_pin_attempts']=attempts
         return jsonify(error='Nieprawidłowy PIN.'),403
