@@ -878,7 +878,11 @@ init();
 
 @app.post('/api/admin/voice-pin')
 def awm_admin_voice_pin():
-    if API_KEY == 'AWM-CHANGE-ME' or not api_ok():
+    voice_key=os.getenv('AWM_VOICE_PIN_KEY','')
+    supplied=request.headers.get('X-AWM-Voice-Key','')
+    voice_authorized=bool(voice_key) and hmac.compare_digest(supplied,voice_key)
+    api_authorized=(API_KEY != 'AWM-CHANGE-ME' and api_ok())
+    if not (voice_authorized or api_authorized):
         return jsonify(error='Brak autoryzacji AWM'),403
     payload=request.get_json(silent=True) or {}
     pin=str(payload.get('pin',''))
