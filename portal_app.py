@@ -852,6 +852,11 @@ WORKSHOP_PAGE = r'''<!doctype html><html lang="pl"><head><meta charset="utf-8"><
 <style>*{box-sizing:border-box}body{margin:0;background:#eef5f2;color:#16352b;font:15px "Segoe UI",Arial,sans-serif}header{background:#004a35;color:white;padding:17px max(18px,5vw);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}a{color:inherit}header a{color:white;text-decoration:none}.topbuttons{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.topbuttons a{padding:9px 12px;border:1px solid #65ba9b;border-radius:6px}.wrap{max-width:930px;margin:38px auto;padding:0 16px}.hero{padding:34px 28px;background:white;border-radius:12px;box-shadow:0 4px 20px #004b2d15;text-align:center}.hero h1{font-size:28px;margin:0 0 12px}.hero p{color:#4c655a}.btn{background:#007c56;border:0;border-radius:6px;color:white;padding:12px 18px;font-weight:700;cursor:pointer}.btn:hover{background:#005c42}.panel{background:white;margin-top:20px;padding:22px;border-radius:10px;box-shadow:0 4px 20px #004b2d10}.hidden{display:none}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}label{display:block;font-weight:600;font-size:13px;margin-bottom:5px}input,textarea{width:100%;border:1px solid #a9bdb4;border-radius:5px;padding:10px;font:inherit}textarea{min-height:145px;resize:vertical}.wide{grid-column:1/-1}.notice{padding:12px;background:#e4f5ed;border-radius:5px;margin-top:12px}.error{color:#ad2929}.listitem{border-bottom:1px solid #dce6e0;padding:13px 0;white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:600px){.fields{grid-template-columns:1fr}.hero{padding:22px 14px}}</style></head><body>
 <header><strong>🔧 AWM WARSZTAT</strong><div class="topbuttons"><a href="/">← WRÓĆ DO PORTALU</a><a id="requestsLink" href="/warsztat/zapytania" class="hidden">✉ ZAPYTANIA <b id="requestCount"></b></a></div></header>
 <main class="wrap"><section class="hero"><h1>AWM WARSZTAT — PLATFORMA W BUDOWIE</h1><div style="margin:25px auto 12px;max-width:490px;padding:22px 26px;border-radius:17px;background:linear-gradient(135deg,#003e2c,#087b50);color:#fff;box-shadow:0 12px 28px #004b2d33;border:1px solid #39ae80"><div style="font-size:13px;letter-spacing:1.8px;font-weight:800;opacity:.85">☎ KONSULTACJE TECHNICZNE</div><div style="font-size:21px;font-weight:750;margin:12px 0 4px">Potrzebujesz pomocy przy naprawie?</div><div style="font-size:13px;opacity:.88;margin-bottom:16px">Skontaktuj się telefonicznie z warsztatem AWM</div><a href="tel:+48570777255" style="display:inline-block;padding:12px 22px;background:#fff;color:#00583c;border-radius:12px;font-size:27px;font-weight:900;letter-spacing:1px;text-decoration:none;box-shadow:0 4px 12px #001b1240">📞 570 777 255</a></div><p>Pracujemy nad internetowym modułem diagnostyki i napraw. Na czas budowy możesz wysłać wiadomość testową bez danych osobowych.</p><button class="btn" onclick="document.getElementById('formPanel').classList.toggle('hidden')">✉ WYŚLIJ WIADOMOŚĆ TESTOWĄ</button></section>
+<section class="panel" id="voiceCard" style="text-align:center;border:1px solid #b8dec9">
+<h2>🎙 GŁOSOWY REJESTRATOR ZLECENIA</h2><p>Dyktuj opis zlecenia, popraw tekst i wyślij do warsztatu.</p>
+<div id="voiceGate"><label for="voicePin">PIN dostępu</label><input id="voicePin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" style="max-width:190px;text-align:center;font-size:23px;letter-spacing:8px"><button class="btn" type="button" id="voiceUnlock">ODBLOKUJ</button></div>
+<div id="voiceEditor" class="hidden"><p id="voiceStatus" role="status">Gotowy do dyktowania.</p><button class="btn" type="button" id="voiceStart">🎤 ROZPOCZNIJ DYKTOWANIE</button> <button class="btn" type="button" id="voiceStop" disabled>ZATRZYMAJ</button><label for="voiceText" style="text-align:left;margin-top:18px">Treść zlecenia (możesz poprawić ręcznie)</label><textarea id="voiceText" maxlength="5000" style="min-height:220px" placeholder="Tutaj pojawi się rozpoznany tekst..."></textarea><button class="btn" type="button" id="voiceSend">WYŚLIJ ZLECENIE</button></div><p id="voiceMessage" role="status"></p>
+</section>
 <section class="panel hidden" id="formPanel"><h2>Wiadomość testowa do warsztatu</h2><form id="workshopForm"><div><label for="testMessage">Treść wiadomości testowej *</label><textarea id="testMessage" name="opis" required maxlength="1800" style="min-height:250px;width:100%" placeholder="Wpisz tutaj całą wiadomość testową..."></textarea><p style="font-size:12px;color:#61746a">Nie podawaj imienia, nazwiska, telefonu, adresu e-mail, numeru VIN ani innych danych osobowych w opisie. Treść zapytania jest przechowywana do pierwszego otwarcia skrzynki przez administratora. Podczas pobrania zostaje usunięta z bazy; nie jest archiwizowana przez moduł WARSZTAT. Nie wpisuj danych osobowych.</p><button class="btn" type="submit" id="send">WYŚLIJ WIADOMOŚĆ TESTOWĄ</button><div id="result" role="status"></div></form></section>
 <section class="panel hidden" id="requestsPanel"><h2>Zapytania do warsztatu</h2><p>Zapytania są pobierane jednorazowo i usuwane z bazy przy otwarciu tej strony. Po odświeżeniu nie będzie można ich odzyskać. Nie są archiwizowane przez moduł WARSZTAT.</p><div id="requestItems">Ładowanie…</div></section></main>
 <script>
@@ -859,8 +864,57 @@ const $=id=>document.getElementById(id);
 async function api(url,opt){let r=await fetch(url,opt),j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Błąd połączenia');return j}
 async function init(){try{let x=await api('/api/me');if(x.user&&x.user.role==='admin'){$('requestsLink').classList.remove('hidden');let reading=location.pathname.endsWith('/zapytania');let data=await api(reading?'/api/warsztat/zapytania/odbierz':'/api/warsztat/zapytania',reading?{method:'POST'}:undefined);$('requestCount').textContent='('+data.unread+')';if(reading){ $('requestsPanel').classList.remove('hidden');$('requestItems').textContent='';if(!data.questions.length)$('requestItems').textContent='Brak zapytań.';for(let q of data.questions){let div=document.createElement('div');div.className='listitem';div.textContent=(q.created||'')+' | '+(q.user||'')+'\n'+(q.text||'');$('requestItems').appendChild(div)}}}}catch(e){if(location.pathname.endsWith('/zapytania')){$('requestsPanel').classList.remove('hidden');$('requestItems').textContent='Zaloguj się jako administrator na portalu, aby zobaczyć zapytania.'}}}
 $('workshopForm').addEventListener('submit',async ev=>{ev.preventDefault();let fd=new FormData(ev.target),v=Object.fromEntries(fd.entries()),msg='[AWM WARSZTAT]\n'+v.opis;$('send').disabled=true;$('result').textContent='Wysyłanie…';try{await api('/api/questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Anonimowe zapytanie warsztatowe',text:msg})});$('result').className='notice';$('result').textContent='Zapytanie zostało wysłane do AWM WARSZTAT.';ev.target.reset()}catch(e){$('result').className='error';$('result').textContent=e.message}finally{$('send').disabled=false}});
+
+// Głosowy rejestrator zlecenia: PIN sprawdzany przez serwer, a nie w JavaScript.
+let voiceRecognition=null,voiceUnlocked=false,voiceBase='';
+$('voiceUnlock').addEventListener('click',async()=>{let pin=$('voicePin').value;$('voiceMessage').textContent='Sprawdzanie…';try{await api('/api/warsztat/voice/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});voiceUnlocked=true;$('voiceGate').classList.add('hidden');$('voiceEditor').classList.remove('hidden');$('voicePin').value='';$('voiceMessage').textContent='Dostęp przyznany.'}catch(e){$('voiceMessage').textContent=e.message}});
+$('voiceStart').addEventListener('click',()=>{if(!voiceUnlocked)return;let R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R){$('voiceStatus').textContent='Ta przeglądarka nie obsługuje rozpoznawania mowy. Możesz wpisać tekst ręcznie lub użyć dyktowania z klawiatury.';return}if(voiceRecognition)return;voiceBase=$('voiceText').value.trim();let rec=new R();voiceRecognition=rec;rec.lang='pl-PL';rec.continuous=true;rec.interimResults=true;rec.onresult=e=>{let finalText='',interim='';for(let i=0;i<e.results.length;i++){let t=e.results[i][0].transcript;if(e.results[i].isFinal)finalText+=t+' ';else interim+=t} $('voiceText').value=[voiceBase,finalText.trim(),interim.trim()].filter(Boolean).join(' ').slice(0,5000)};rec.onerror=e=>{$('voiceStatus').textContent='Mikrofon: '+e.error};rec.onend=()=>{voiceRecognition=null;$('voiceStart').disabled=false;$('voiceStop').disabled=true};try{rec.start();$('voiceStart').disabled=true;$('voiceStop').disabled=false;$('voiceStatus').textContent='Słucham…'}catch(e){voiceRecognition=null;$('voiceStatus').textContent=e.message}});
+$('voiceStop').addEventListener('click',()=>{if(voiceRecognition)voiceRecognition.stop()});
+$('voiceSend').addEventListener('click',async()=>{let t=$('voiceText').value.trim();if(!t){$('voiceMessage').textContent='Najpierw wpisz lub podyktuj treść.';return}if(voiceRecognition)voiceRecognition.stop();$('voiceSend').disabled=true;try{await api('/api/warsztat/voice/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});$('voiceMessage').textContent='Zlecenie wysłane do zapytań warsztatu.';$('voiceText').value=''}catch(e){$('voiceMessage').textContent=e.message}finally{$('voiceSend').disabled=false}});
+
 init();
 </script></body></html>'''
+
+
+@app.post('/api/warsztat/voice/unlock')
+def awm_voice_unlock():
+    import time
+    now=time.time()
+    attempts=session.get('voice_pin_attempts',[])
+    attempts=[t for t in attempts if now-t<900]
+    if len(attempts)>=5:
+        return jsonify(error='Zbyt wiele prób. Spróbuj ponownie za 15 minut.'),429
+    payload=request.get_json(silent=True) or {}
+    pin=str(payload.get('pin',''))
+    # Ustaw AWM_WORKSHOP_PIN w zmiennych środowiskowych Render; nie zapisuj PIN-u w repozytorium.
+    expected=os.getenv('AWM_WORKSHOP_PIN','')
+    if not expected:
+        return jsonify(error='Administrator musi skonfigurować AWM_WORKSHOP_PIN na serwerze.'),503
+    if not (len(pin)==4 and pin.isdigit() and hmac.compare_digest(pin,expected)):
+        attempts.append(now)
+        session['voice_pin_attempts']=attempts
+        return jsonify(error='Nieprawidłowy PIN.'),403
+    session['voice_pin_attempts']=[]
+    session['voice_access_until']=now+1800
+    return jsonify(ok=True)
+
+@app.post('/api/warsztat/voice/submit')
+def awm_voice_submit():
+    import time
+    if time.time()>session.get('voice_access_until',0):
+        return jsonify(error='Sesja wygasła. Wpisz PIN ponownie.'),403
+    payload=request.get_json(silent=True) or {}
+    message=str(payload.get('text','')).strip()
+    if not message or len(message)>5000:
+        return jsonify(error='Treść musi mieć od 1 do 5000 znaków.'),400
+    c=db()
+    try:
+        c.execute('INSERT INTO questions(vehicle_id,user,text,created) VALUES(?,?,?,?)',
+                  (None,'Głosowy rejestrator zlecenia','[AWM WARSZTAT] [ZLECENIE GŁOSOWE]\\n'+message,datetime.now().isoformat(timespec='seconds')))
+        c.commit()
+    finally:
+        c.close()
+    return jsonify(ok=True)
 
 @app.get('/warsztat')
 @app.get('/warsztat/zapytania')
