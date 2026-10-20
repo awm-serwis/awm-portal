@@ -48,7 +48,7 @@ def install(app):
             if isinstance(photo,dict) and photo.get('data_b64'):
                 try: raw=base64.b64decode(photo['data_b64'],validate=True)
                 except (binascii.Error,ValueError):return err('Nieprawidłowy obraz',400)
-                if len(raw)>3*1024*1024 or raw[:3]!=b'\\xff\\xd8\\xff':return err('Nieprawidłowe zdjęcie JPEG (maksymalnie 3 MB)',400)
+                if len(raw)>3*1024*1024 or raw[:3]!=bytes((255,216,255)):return err('Nieprawidłowe zdjęcie JPEG (maksymalnie 3 MB)',400)
                 path='workshop/'+secrets.token_hex(16)+'.jpg'
                 sb.storage.from_(BUCKET).upload(path,raw,file_options={'content-type':'image/jpeg'})
                 data['photo_path']=path
