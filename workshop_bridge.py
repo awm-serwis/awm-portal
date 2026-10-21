@@ -104,7 +104,7 @@ def install(app):
         if state.get('count',0)>=5:
             session['awm_workshop_pin_locks']=locks
             return err('Zbyt wiele prób. Spróbuj ponownie za kilka minut.',429)
-        if not pin.isascii() or not pin.isdigit() or not 4<=len(pin)<=8:return err('Nieprawidłowy PIN',403)
+        if not pin.isascii() or not pin.isdigit() or not 1<=len(pin)<=8:return err('Nieprawidłowy PIN',403)
         rows=sb.table('awm_workshop_cases').select('pin_hash').eq('id',cid).limit(1).execute().data or []
         if not rows:return err('Nie znaleziono pojazdu',404)
         stored=rows[0].get('pin_hash') or ''
