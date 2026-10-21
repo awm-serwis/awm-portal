@@ -13,7 +13,7 @@
  const list=document.createElement('div');list.id='awmLiveList';root.querySelector('.awm-workshop-search').insertAdjacentElement('afterend',list);
  const banner=root.querySelector('.preview-head .tag');if(banner)banner.textContent='ZLECENIA Z PROGRAMU AWM';
  const hint=root.querySelector('.demo-note');if(hint)hint.textContent='Zlecenia z programu AWM. Po kliknięciu PIN wyświetlą się szczegóły wybranego pojazdu.';
- const cases=data.cases||[];
+ const cases=Array.isArray(data.cases)?data.cases:[];
  if(!cases.length){list.innerHTML='<div class="panel">Brak opublikowanych zleceń. W programie AWM WARSZTAT wybierz WYŚLIJ NA PORTAL.</div>';return}
  const modal=document.createElement('div');modal.className='awm-vehicle-pin-modal';modal.hidden=true;modal.style.cssText='position:fixed;inset:0;z-index:2147483000;background:rgba(0,25,16,.75);display:none;align-items:center;justify-content:center;padding:16px';
  modal.innerHTML='<div class="panel" style="width:min(420px,94vw)"><h2>PIN pojazdu</h2><p>Wpisz PIN nadany w programie AWM (1–8 cyfr).</p><input type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="PIN pojazdu" style="font-size:22px;letter-spacing:6px;text-align:center"><p role="alert" class="error"></p><button type="button" class="btn accept">Otwórz kartę</button> <button type="button" class="btn cancel" style="background:#607c70">Anuluj</button></div>';
@@ -46,7 +46,7 @@
  let current=null;
  function card(v){const p=v.vehicle||{};const name=[p.marka,p.model].filter(Boolean).join(' ')||v.label||'Pojazd';
   const div=document.createElement('article');div.className='vehicle-card';div.dataset.needle=[name,p.vin,p.rejestracja,v.repair_no,v.repair_title].join(' ').toLowerCase();
-  const status=(v.stages||[]).at(-1)?.name||'Przyjęty do warsztatu';
+  const status=(Array.isArray(v.stages)?v.stages:[]).at(-1)?.name||'Przyjęty do warsztatu';
   div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie po PIN</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rok</small><strong>'+escape(p.rok||'—')+'</strong></div><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>VIN</small><strong>'+escape(p.vin||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div><div class="side"><button class="awm-open-repair" type="button">🔒 PIN</button></div>';
   div.querySelector('button').onclick=()=>{selected=v;modal.querySelector('[role=alert]').textContent='';modal.hidden=false;modal.style.display='flex';modal.querySelector('input').value='';requestAnimationFrame(()=>modal.querySelector('input').focus())};
   return div;}
@@ -68,7 +68,7 @@
   section.innerHTML='<div style="margin:14px 0"><button class="btn back" type="button">← Powrót do pojazdów</button></div>'+
    '<div class="vehicle-card"><div class="car-photo photo-slot">'+(current.has_photo?'Ładowanie zdjęcia…':'🚘')+'</div><div class="vehicle-info"><h2>'+escape([p.marka,p.model].join(' '))+'</h2><p>VIN: '+escape(p.vin)+' · Rejestracja: '+escape(p.rejestracja)+'</p><p>'+escape(current.repair_no||'')+'</p></div></div>'+
    '<div class="timeline">'+stages.map(t=>'<div class="step '+(current.stages||[]).some(z=>z.name===t?'on':'')+'"><b>✓</b>'+escape(t)+'</div>').join('')+'</div><div class="accordions">'+sections.filter(z=>z[1]==='dtc'||Object.hasOwn(s,z[1])).map(z=>'<details><summary>'+z[0]+'</summary><div class="inner">'+(z[2]||'Brak danych')+'</div></details>').join('')+'</div>';
-  list.after(section);list.hidden=true;root.querySelector('.awm-workshop-search').hidden=true;selectedHead.textContent='Karta naprawy — '+(current.label||current.repair_no||'Pojazd');section.querySelector('.back').onclick=()=>{section.remove();list.hidden=false;root.querySelector('.awm-workshop-search').hidden=false;selectedHead.textContent=originalTitle;};
+  list.after(section);list.hidden=false;root.querySelector('.awm-workshop-search').hidden=false;selectedHead.textContent='Karta naprawy — '+(current.label||current.repair_no||'Pojazd');section.querySelector('.back').onclick=()=>{section.remove();selectedHead.textContent=originalTitle;};section.scrollIntoView({block:'start',behavior:'smooth'});
   if(current.has_photo){const img=document.createElement('img');img.alt='Zdjęcie pojazdu';img.src='/api/warsztat/cases/'+v.id+'/photo';img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:6px';const slot=section.querySelector('.photo-slot');slot.innerHTML='';slot.appendChild(img)}
  }
 })();
