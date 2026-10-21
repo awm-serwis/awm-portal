@@ -16,7 +16,7 @@
  const cases=data.cases||[];
  if(!cases.length){list.innerHTML='<div class="panel">Brak opublikowanych zleceń. W programie AWM WARSZTAT wybierz WYŚLIJ NA PORTAL.</div>';return}
  const modal=document.createElement('div');modal.className='voice-overlay hidden';modal.style.zIndex=1250;
- modal.innerHTML='<div class="panel" style="width:min(420px,94vw)"><h2>PIN pojazdu</h2><p>Wpisz PIN, aby otworzyć kartę naprawy.</p><input type="password" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="PIN pojazdu" style="font-size:22px;letter-spacing:6px;text-align:center"><p role="alert" class="error"></p><button type="button" class="btn accept">Otwórz kartę</button> <button type="button" class="btn cancel" style="background:#607c70">Anuluj</button></div>';
+ modal.innerHTML='<div class="panel" style="width:min(420px,94vw)"><h2>PIN pojazdu</h2><p>Wpisz PIN nadany w programie AWM (1–8 cyfr).</p><input type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="PIN pojazdu" style="font-size:22px;letter-spacing:6px;text-align:center"><p role="alert" class="error"></p><button type="button" class="btn accept">Otwórz kartę</button> <button type="button" class="btn cancel" style="background:#607c70">Anuluj</button></div>';
  document.body.appendChild(modal);let selected=null;
  modal.querySelector('.cancel').onclick=()=>modal.classList.add('hidden');
  function closeModal(){modal.classList.add('hidden');modal.querySelector('input').value='';}
@@ -47,7 +47,7 @@
   const div=document.createElement('article');div.className='vehicle-card';div.dataset.needle=[name,p.vin,p.rejestracja,v.repair_no,v.repair_title].join(' ').toLowerCase();
   const status=(v.stages||[]).at(-1)?.name||'Przyjęty do warsztatu';
   div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie po PIN</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rok</small><strong>'+escape(p.rok||'—')+'</strong></div><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>VIN</small><strong>'+escape(p.vin||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div><div class="side"><button class="awm-open-repair" type="button">🔒 PIN</button></div>';
-  div.querySelector('button').onclick=()=>{selected=v;modal.querySelector('[role=alert]').textContent='';modal.classList.remove('hidden');modal.querySelector('input').focus()};
+  div.querySelector('button').onclick=()=>{selected=v;modal.querySelector('[role=alert]').textContent='';modal.classList.remove('hidden');modal.querySelector('input').value='';requestAnimationFrame(()=>modal.querySelector('input').focus())};
   return div;}
  const nodes=cases.map(card);nodes.forEach(n=>list.appendChild(n));
  search.oninput=()=>{let s=search.value.toLowerCase().trim();nodes.forEach(n=>n.hidden=!n.dataset.needle.includes(s))};
