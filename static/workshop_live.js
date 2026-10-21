@@ -8,7 +8,7 @@
  let data;
  try{const r=await fetch('/api/warsztat/cases',{credentials:'same-origin'});if(!r.ok)throw Error('offline');data=await r.json();}
  catch(e){const hint=root.querySelector('.demo-note');if(hint)hint.textContent='Brak połączenia z listą zleceń AWM. Odśwież stronę lub sprawdź usługę portalu.';return}
- if(!data.ok){throw Error('Nie udało się pobrać listy pojazdów');}
+ if(!data.ok){const hint=root.querySelector('.demo-note');if(hint)hint.textContent='Nie udało się pobrać listy pojazdów.';return;}
  rows.forEach(c=>c.remove());if(details){details.hidden=true;}
  const list=document.createElement('div');list.id='awmLiveList';root.querySelector('.awm-workshop-search').insertAdjacentElement('afterend',list);
  const banner=root.querySelector('.preview-head .tag');if(banner)banner.textContent='ZLECENIA Z PROGRAMU AWM';
@@ -46,7 +46,7 @@
  function card(v){const p=v.vehicle||{};const name=[p.marka,p.model].filter(Boolean).join(' ')||v.label||'Pojazd';
   const div=document.createElement('article');div.className='vehicle-card';div.dataset.needle=[name,p.vin,p.rejestracja,v.repair_no,v.repair_title].join(' ').toLowerCase();
   const status=(Array.isArray(v.stages)?v.stages:[]).at(-1)?.name||'Przyjęty do warsztatu';
-  div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie po PIN</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rok</small><strong>'+escape(p.rok||'—')+'</strong></div><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>VIN</small><strong>'+escape(p.vin||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div><div class="side"><button class="awm-open-repair" type="button">🔒 PIN</button></div>';
+  div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie po PIN</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div><div class="side"><button class="awm-open-repair" type="button">🔒 PIN</button></div>';
   div.querySelector('button').onclick=(event)=>{event.preventDefault();event.stopPropagation();selected=v;modal.querySelector('[role=alert]').textContent='';modal.querySelector('input').value='';if(!modal.open)modal.showModal();modal.querySelector('input').focus()};
   return div;}
  const nodes=cases.map(card);nodes.forEach(n=>list.appendChild(n));
