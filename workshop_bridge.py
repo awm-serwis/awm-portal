@@ -19,7 +19,14 @@ def install(app):
                 'stages':row.get('stages') or [], 'updated_at':row.get('updated_at'),
                 'has_photo':bool(row.get('photo_path'))}
     def verified(id):
-        return admin() or str(id) in session.get('awm_workshop_verified',[])
+        if admin():return True
+        token=session.get('awm_workshop_verified',{}).get(str(id))
+        if not token:return False
+        try:
+            rows=sb.table('awm_workshop_cases').select('pin_hash').eq('id',str(id)).limit(1).execute().data or []
+            stored=(rows[0].get('pin_hash') or '') if rows else ''
+            return bool(stored) and hmac.compare_digest(token,hashlib.sha256(stored.encode()).hexdigest())
+        except Exception:return False
     @app.post('/api/admin/workshop/cases')
     def awm_workshop_publish_r42():
         if not api():return err('Brak autoryzacji programu AWM',403)
@@ -44,6 +51,8 @@ def install(app):
                   'repair_title':clean_text(x.get('repair_title'),200),
                   'vehicle':vehicle,'stages':stages,'sections':sections,'updated_at':datetime.utcnow().isoformat()+'Z'}
             if pin: data['pin_hash']=pin
+            if not pin and not old:return err('Ustaw PIN pojazdu w programie AWM przed publikacją',400)
+            if not pin and old and not old.get('pin_hash'):return err('Brak PIN pojazdu w programie AWM',400)
             photo=x.get('photo')
             if isinstance(photo,dict) and photo.get('data_b64'):
                 try: raw=base64.b64decode(photo['data_b64'],validate=True)
@@ -86,10 +95,7 @@ def install(app):
     @app.post('/api/warsztat/cases/<uuid:cid>/unlock')
     def awm_workshop_unlock_r42(cid):
         cid=str(cid)
-        if admin():
-            ids=session.get('awm_workshop_verified',[])
-            if cid not in ids:session['awm_workshop_verified']=(ids+[cid])[-30:]
-            return jsonify(ok=True)
+        if admin():return jsonify(ok=True)
         pin=str((request.get_json(silent=True) or {}).get('pin') or '')
         attempts=session.get('awm_workshop_pin_tries',0)
         if attempts>=5:return err('Zbyt wiele prób. Spróbuj ponownie później.',429)
@@ -106,8 +112,10 @@ def install(app):
             session['awm_workshop_pin_tries']=attempts+1
             return err('Nieprawidłowy PIN',403)
         session['awm_workshop_pin_tries']=0
-        ids=session.get('awm_workshop_verified',[])
-        session['awm_workshop_verified']=(ids+[cid])[-30:]
+        ids=session.get('awm_workshop_verified',{})
+        if not isinstance(ids,dict):ids={}
+        ids[cid]=hashlib.sha256(stored.encode()).hexdigest()
+        session['awm_workshop_verified']=dict(list(ids.items())[-30:])
         return jsonify(ok=True)
     @app.get('/api/warsztat/cases/<uuid:cid>')
     def awm_workshop_details_r42(cid):
