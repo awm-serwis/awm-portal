@@ -19,7 +19,6 @@ def install(app):
                 'stages':row.get('stages') or [], 'updated_at':row.get('updated_at'),
                 'has_photo':bool(row.get('photo_path'))}
     def verified(id):
-        if admin():return True
         token=session.get('awm_workshop_verified',{}).get(str(id))
         if not token:return False
         try:
@@ -95,7 +94,6 @@ def install(app):
     @app.post('/api/warsztat/cases/<uuid:cid>/unlock')
     def awm_workshop_unlock_r42(cid):
         cid=str(cid)
-        if admin():return jsonify(ok=True)
         pin=str((request.get_json(silent=True) or {}).get('pin') or '')
         attempts=session.get('awm_workshop_pin_tries',0)
         if attempts>=5:return err('Zbyt wiele prób. Spróbuj ponownie później.',429)
