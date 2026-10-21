@@ -1,5 +1,5 @@
 """AWM R42 workshop bridge. Authenticated desktop publish; customer PIN verification."""
-import base64, binascii, hashlib, hmac, io, os, secrets
+import base64, binascii, hashlib, hmac, io, os, secrets, time
 from datetime import datetime
 from flask import jsonify, request, session, send_file, Response
 
@@ -95,9 +95,16 @@ def install(app):
     def awm_workshop_unlock_r42(cid):
         cid=str(cid)
         pin=str((request.get_json(silent=True) or {}).get('pin') or '')
-        attempts=session.get('awm_workshop_pin_tries',0)
-        if attempts>=5:return err('Zbyt wiele prób. Spróbuj ponownie później.',429)
-        if not pin.isascii() or not pin.isdigit() or len(pin)>12:return err('Nieprawidłowy PIN',403)
+        # Per-case temporary lockout; legacy global counter is intentionally ignored.
+        now=int(time.time())
+        locks=session.get('awm_workshop_pin_locks',{})
+        if not isinstance(locks,dict):locks={}
+        locks={k:v for k,v in locks.items() if isinstance(v,dict) and int(v.get('until',0))>now}
+        state=locks.get(cid,{'count':0,'until':now+300})
+        if state.get('count',0)>=5:
+            session['awm_workshop_pin_locks']=locks
+            return err('Zbyt wiele prób. Spróbuj ponownie za kilka minut.',429)
+        if not pin.isascii() or not pin.isdigit() or not 4<=len(pin)<=8:return err('Nieprawidłowy PIN',403)
         rows=sb.table('awm_workshop_cases').select('pin_hash').eq('id',cid).limit(1).execute().data or []
         if not rows:return err('Nie znaleziono pojazdu',404)
         stored=rows[0].get('pin_hash') or ''
@@ -107,9 +114,12 @@ def install(app):
             match=hmac.compare_digest(test,digest)
         except Exception:match=False
         if not match:
-            session['awm_workshop_pin_tries']=attempts+1
-            return err('Nieprawidłowy PIN',403)
-        session['awm_workshop_pin_tries']=0
+            state['count']=int(state.get('count',0))+1
+            locks[cid]=state
+            session['awm_workshop_pin_locks']=locks
+            return err('Nieprawidłowy PIN' if state['count']<5 else 'Zbyt wiele prób. Spróbuj ponownie za kilka minut.',403 if state['count']<5 else 429)
+        locks.pop(cid,None)
+        session['awm_workshop_pin_locks']=locks
         ids=session.get('awm_workshop_verified',{})
         if not isinstance(ids,dict):ids={}
         ids[cid]=hashlib.sha256(stored.encode()).hexdigest()
