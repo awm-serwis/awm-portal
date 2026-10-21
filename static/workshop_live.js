@@ -7,8 +7,8 @@
  const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let data;
  try{const r=await fetch('/api/warsztat/cases',{credentials:'same-origin'});if(!r.ok)throw Error('offline');data=await r.json();}
- catch(e){return}
- if(!data.ok)return;
+ catch(e){const hint=root.querySelector('.demo-note');if(hint)hint.textContent='Brak połączenia z listą zleceń AWM. Odśwież stronę lub sprawdź usługę portalu.';return}
+ if(!data.ok){throw Error('Nie udało się pobrać listy pojazdów');}
  rows.forEach(c=>c.remove());if(details){details.hidden=true;}
  const list=document.createElement('div');list.id='awmLiveList';root.querySelector('.awm-workshop-search').insertAdjacentElement('afterend',list);
  const banner=root.querySelector('.preview-head .tag');if(banner)banner.textContent='ZLECENIA Z PROGRAMU AWM';
@@ -23,8 +23,20 @@
  modal.querySelector('.accept').onclick=async()=>{
   const input=modal.querySelector('input'),alert=modal.querySelector('[role=alert]');
   alert.textContent='Sprawdzanie…';
-  try{const r=await fetch('/api/warsztat/cases/'+selected.id+'/unlock',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:input.value})});const x=await r.json();if(!r.ok)throw Error(x.error||'Błędny PIN');closeModal();await open(selected);}
-  catch(e){alert.textContent=e.message;}
+  const button=modal.querySelector('.accept');
+  if(button.disabled)return;
+  if(!selected){alert.textContent='Najpierw wybierz pojazd.';return;}
+  const chosen=selected;
+  button.disabled=true;
+  try{
+   const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(chosen.id)+'/unlock',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:input.value})});
+   const x=await r.json().catch(()=>({}));
+   if(!r.ok||!x.ok)throw Error(x.error||'Nie udało się zweryfikować PIN-u ('+r.status+').');
+   alert.textContent='Otwieranie karty…';
+   await open(chosen);
+   closeModal();
+  }catch(e){alert.textContent=e.message||'Nie udało się otworzyć karty pojazdu.';}
+  finally{button.disabled=false;}
  };
  modal.querySelector('input').onkeydown=e=>{if(e.key==='Enter')modal.querySelector('.accept').click();if(e.key==='Escape')closeModal()};
  const selectedHead=root.querySelector('.preview-head h1');
@@ -41,7 +53,10 @@
  search.oninput=()=>{let s=search.value.toLowerCase().trim();nodes.forEach(n=>n.hidden=!n.dataset.needle.includes(s))};
  const searchBtn=document.querySelector('.awm-workshop-search button');if(searchBtn)searchBtn.onclick=()=>search.dispatchEvent(new Event('input'));
  async function open(v){
-  const r=await fetch('/api/warsztat/cases/'+v.id,{credentials:'same-origin'}),x=await r.json();if(!r.ok){alert(x.error||'Błąd odczytu');return}
+  const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(v.id),{credentials:'same-origin'});
+  const x=await r.json().catch(()=>({}));
+  if(!r.ok||!x.ok||!x.case)throw Error(x.error||'Nie udało się pobrać szczegółów pojazdu ('+r.status+').');
+  document.getElementById('awmLiveDetails')?.remove();
   current=x.case;list.hidden=true;root.querySelector('.awm-workshop-search').hidden=true;selectedHead.textContent='Karta naprawy — '+(current.label||current.repair_no||'Pojazd');
   const section=document.createElement('section');section.id='awmLiveDetails';
   const p=current.vehicle||{},s=current.sections||{};
