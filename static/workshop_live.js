@@ -58,17 +58,17 @@
   const x=await r.json().catch(()=>({}));
   if(!r.ok||!x.ok||!x.case)throw Error(x.error||'Nie udało się pobrać szczegółów pojazdu ('+r.status+').');
   document.getElementById('awmLiveDetails')?.remove();
-  current=x.case;list.hidden=true;root.querySelector('.awm-workshop-search').hidden=true;selectedHead.textContent='Karta naprawy — '+(current.label||current.repair_no||'Pojazd');
+  current=x.case;
   const section=document.createElement('section');section.id='awmLiveDetails';
-  const p=current.vehicle||{},s=current.sections||{};
-  const parts=Array.isArray(s.czesci)?s.czesci.map(z=>escape(z.name)+' — '+escape(z.price)+' zł').join('<hr>'):'';
-  const ct=s.koszty||{};
+  const p=current.vehicle||{},s=(current.sections&&typeof current.sections==='object'&&!Array.isArray(current.sections))?current.sections:{};
+  const parts=Array.isArray(s.czesci)?s.czesci.map(z=>escape(z?.name||z?.nazwa||'Część')+' — '+escape(z?.price||z?.cena||0)+' zł').join('<hr>'):escape(s.czesci||'');
+  const ct=(s.koszty&&typeof s.koszty==='object')?s.koszty:{};
   const sections=[['💬 Usterka zgłoszona przez klienta','usterka',escape(s.usterka)],['🧰 Raport DTC','dtc','Raport skanera może zostać dołączony w kolejnej aktualizacji'],['🩺 Diagnoza warsztatu','diagnoza',escape(s.diagnoza)],['🛠 Zakres naprawy','zakres',escape(s.zakres)],['📦 Zastosowane części','czesci',parts],['💰 Koszty naprawy','koszty','Części: '+escape(ct.czesci||0)+' zł; robocizna: '+escape(ct.robocizna||0)+' zł; razem: '+escape(ct.razem||0)+' zł'],['📅 Terminy','terminy',escape(JSON.stringify(s.terminy||{}))],['✅ Zgody i akceptacje','zgody',escape(JSON.stringify(s.zgody||{}))]];
   if(s.notatki)sections.push(['📝 Notatki warsztatu','notatki',escape(s.notatki)]);
   section.innerHTML='<div style="margin:14px 0"><button class="btn back" type="button">← Powrót do pojazdów</button></div>'+
    '<div class="vehicle-card"><div class="car-photo photo-slot">'+(current.has_photo?'Ładowanie zdjęcia…':'🚘')+'</div><div class="vehicle-info"><h2>'+escape([p.marka,p.model].join(' '))+'</h2><p>VIN: '+escape(p.vin)+' · Rejestracja: '+escape(p.rejestracja)+'</p><p>'+escape(current.repair_no||'')+'</p></div></div>'+
    '<div class="timeline">'+stages.map(t=>'<div class="step '+(current.stages||[]).some(z=>z.name===t?'on':'')+'"><b>✓</b>'+escape(t)+'</div>').join('')+'</div><div class="accordions">'+sections.filter(z=>z[1]==='dtc'||Object.hasOwn(s,z[1])).map(z=>'<details><summary>'+z[0]+'</summary><div class="inner">'+(z[2]||'Brak danych')+'</div></details>').join('')+'</div>';
-  list.after(section);section.querySelector('.back').onclick=()=>{section.remove();list.hidden=false;root.querySelector('.awm-workshop-search').hidden=false;selectedHead.textContent=originalTitle;};
+  list.after(section);list.hidden=true;root.querySelector('.awm-workshop-search').hidden=true;selectedHead.textContent='Karta naprawy — '+(current.label||current.repair_no||'Pojazd');section.querySelector('.back').onclick=()=>{section.remove();list.hidden=false;root.querySelector('.awm-workshop-search').hidden=false;selectedHead.textContent=originalTitle;};
   if(current.has_photo){const img=document.createElement('img');img.alt='Zdjęcie pojazdu';img.src='/api/warsztat/cases/'+v.id+'/photo';img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:6px';const slot=section.querySelector('.photo-slot');slot.innerHTML='';slot.appendChild(img)}
  }
 })();
