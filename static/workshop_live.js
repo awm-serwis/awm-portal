@@ -75,9 +75,10 @@
    '<div class="awm-repair-content" aria-live="polite">'+shown.map(z=>'<div class="awm-repair-panel" data-panel="'+escape(z[1])+'" hidden><h3>'+z[0]+'</h3><div class="inner">'+z[2]+'</div></div>').join('')+'</div>';
   list.after(section);
   list.hidden=true;
+  rows.forEach(c=>c.hidden=true);
   root.querySelector('.awm-workshop-search').hidden=true;
   selectedHead.textContent='Karta naprawy — '+(current.label||current.repair_no||'Pojazd');
-  section.querySelector('.back').onclick=()=>{section.remove();list.hidden=false;root.querySelector('.awm-workshop-search').hidden=false;selectedHead.textContent=originalTitle;};
+  section.querySelector('.back').onclick=()=>{section.remove();list.hidden=false;rows.forEach(c=>c.hidden=false);root.querySelector('.awm-workshop-search').hidden=false;selectedHead.textContent=originalTitle;};
   const tabs=[...section.querySelectorAll('.awm-repair-tab')];
   const panels=[...section.querySelectorAll('.awm-repair-panel')];
   tabs.forEach(tab=>tab.addEventListener('click',()=>{
