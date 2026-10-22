@@ -1210,7 +1210,7 @@ def awm_workshop_landing():
     user=session.get('user')
     if not user or user.get('role')!='admin':
         return Response('<!doctype html><html lang="pl"><meta charset="utf-8"><title>AWM WARSZTAT — dostęp chroniony</title><body style="font:16px Arial;padding:36px"><h2>AWM WARSZTAT — dostęp tylko dla zalogowanego warsztatu</h2><p>Zaloguj się na platformie jako administrator warsztatu.</p><a href="/">PRZEJDŹ DO LOGOWANIA</a></body></html>',status=403,mimetype='text/html')
-    return Response(WORKSHOP_PAGE.replace('</body>','<script src="/static/workshop_live.js?v=r49-selected-tiles"></script></body>'),mimetype='text/html')
+    return Response(WORKSHOP_PAGE.replace('</body>','<script src="/static/workshop_live.js?v=r50-compact-layout-fix"></script></body>'),mimetype='text/html')
 
 @app.get('/warsztat/zapytania')
 def awm_workshop_requests_redirect():
