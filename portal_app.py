@@ -132,83 +132,6 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 /* AWM AI valuation amount under button */
 .actions .aivalbtn{height:auto!important;min-height:34px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;line-height:1.05!important;padding:5px 10px!important}
 .actions .aivalbtn small{display:block!important;margin-top:3px!important;color:#d61f1f!important;font-size:11px!important;font-weight:900!important;line-height:1!important}
-.awm-collected{display:flex;align-items:center;padding:8px;background:#e8eeec;border-radius:12px}.awm-collected .a{background:#b8c5c0;color:#294139;min-height:52px}.actions .a{min-width:110px;min-height:48px}.actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}/* AWM: compact vehicle row with independent collection status */
-#list .row{display:grid!important;grid-template-columns:110px minmax(310px,1fr) minmax(330px,390px) 126px!important;align-items:center!important;gap:10px!important;padding:7px 9px!important;min-height:86px!important}
-#list .row .pic{width:108px!important;height:70px!important}
-#list .row .awm-collected{display:flex!important;align-items:center!important;justify-content:center!important;padding:5px!important;background:#e7eeeb!important;border-radius:10px!important}
-#list .row .awm-collected .a{width:100%!important;min-height:46px!important;padding:5px!important;font-size:10px!important;line-height:1.15!important}
-/* Restore consistent three-button styling without changing row layout */
-#list .row .actions{display:flex!important;justify-content:flex-end!important;align-items:center!important;gap:8px!important}
-#list .row .actions .a{flex:1 1 0!important;width:auto!important;min-width:0!important;max-width:none!important;height:46px!important;min-height:46px!important;padding:7px 8px!important;font-size:11px!important;line-height:1.2!important;border-radius:9px!important;box-shadow:0 3px 5px #0003!important;white-space:normal!important}
-#list .row .awm-collected{display:flex!important;align-items:center!important;justify-content:center!important;padding:5px!important;background:#e7eeeb!important;border-radius:10px!important}
-#list .row .awm-collected .a{width:100%!important;min-height:46px!important;padding:6px!important;font-size:10px!important;line-height:1.15!important;border-radius:10px!important;box-shadow:0 3px 5px #0003!important}
-@media(max-width:1050px){#list .row{grid-template-columns:95px minmax(150px,1fr) minmax(260px,330px) 126px!important}}
-@media(max-width:680px){#list .row{grid-template-columns:85px minmax(0,1fr)!important}#list .row .actions{grid-column:1/-1!important}#list .row .awm-collected{grid-column:1/-1!important}}
-/* Right-align only existing document tiles; preserve tile dimensions */
-#list .row .actions{display:flex!important;justify-content:flex-end!important;align-items:center!important;gap:8px!important}
-#list .row .actions .a{flex:0 0 112px!important;width:112px!important;min-width:112px!important;max-width:112px!important}
-@media(max-width:680px){#list .row .actions{justify-content:flex-end!important;flex-wrap:wrap!important}#list .row .actions .a{flex:0 0 100px!important;width:100px!important;min-width:100px!important;max-width:100px!important}}
-
-/* AWM restore: document buttons on right, collected below photo */
-@media(min-width:681px){
- #list .row{grid-template-columns:110px minmax(0,1fr) auto!important;grid-template-rows:auto auto!important;align-items:start!important;min-height:0!important}
- #list .row .picwrap{grid-column:1!important;grid-row:1!important}
- #list .row > div:nth-child(2){grid-column:2!important;grid-row:1/3!important;min-width:0!important}
- #list .row .actions{grid-column:3!important;grid-row:1!important;align-self:center!important;justify-content:flex-end!important;flex-wrap:wrap!important}
- #list .row .awm-collected{grid-column:1!important;grid-row:2!important;justify-self:start!important;width:110px!important;margin-top:4px!important}
- #list .row .awm-collected .a{min-height:46px!important}
-}
-@media(max-width:680px){
- #list .row .awm-collected{grid-column:1!important;grid-row:auto!important;width:110px!important}
- #list .row .actions{grid-column:1/-1!important;justify-content:flex-end!important}
-}
-
-/* AWM reference: small right-aligned document tiles */
-#list .row .actions{display:flex!important;justify-content:flex-end!important;align-items:center!important;gap:8px!important;flex-wrap:wrap!important}
-#list .row .actions .a{flex:0 0 74px!important;width:74px!important;min-width:74px!important;max-width:74px!important;height:27px!important;min-height:27px!important;padding:4px 5px!important;border-radius:6px!important;font-size:9px!important;font-weight:800!important;line-height:1.1!important;box-shadow:0 2px 3px #0005!important}
-#list .row .actions .a.blue{background:#8caabd!important;color:white!important}
-#list .row .actions .a.dark{background:#707c79!important;color:white!important}
-#list .row .actions .a.green{background:#15965d!important;color:white!important}
-@media(min-width:681px){#list .row{grid-template-columns:110px minmax(0,1fr) auto!important}}
-
-/* AWM crisp document tile typography */
-#list .row .actions .a{
- font-family:Arial,Helvetica,sans-serif!important;
- font-size:11px!important;
- font-weight:800!important;
- letter-spacing:0!important;
- line-height:1.15!important;
- text-shadow:none!important;
- -webkit-font-smoothing:auto!important;
- text-rendering:optimizeLegibility!important;
- transform:none!important;
- filter:none!important;
-}
-#list .row .actions .a.blue{background:#83a5b9!important;color:#fff!important}
-#list .row .actions .a.dark{background:#66736f!important;color:#fff!important}
-
-/* AWM compact single-line vehicle cards v2 */
-@media(min-width:681px){
- #list .row{grid-template-columns:110px minmax(0,1fr) auto!important;grid-template-rows:70px 34px!important;align-items:center!important;min-height:86px!important;padding:7px 9px!important;position:relative!important;margin-bottom:8px!important}
- #list .row .picwrap{grid-column:1!important;grid-row:1!important;align-self:center!important}
- #list .row > div:nth-child(2){grid-column:2!important;grid-row:1!important;align-self:center!important;min-width:0!important}
- #list .row .actions{grid-column:3!important;grid-row:1!important;align-self:center!important;justify-content:flex-end!important}
- #list .row .awm-collected{position:absolute!important;left:8px!important;top:calc(100% + 4px)!important;z-index:2!important;width:110px!important;margin:0!important;padding:0!important;background:transparent!important}
- #list .row .awm-collected .a{min-height:0!important;height:30px!important;font-size:9px!important;line-height:1!important;padding:4px!important;border-radius:7px!important}
- #list .row{margin-bottom:45px!important}
-}
-#list .row .actions .a{flex:0 0 98px!important;width:98px!important;min-width:98px!important;max-width:98px!important;height:28px!important;min-height:28px!important;padding:4px 6px!important;font-size:10px!important;font-weight:800!important;border-radius:6px!important;box-shadow:0 2px 3px #0005!important}
-
-/* AWM reference exact compact horizontal cards */
-@media(min-width:681px){
- #list .row{display:grid!important;grid-template-columns:110px minmax(0,1fr) auto auto!important;grid-template-rows:70px!important;align-items:center!important;gap:7px!important;padding:5px 8px!important;min-height:80px!important;margin-bottom:5px!important}
- #list .row .picwrap{grid-column:1!important;grid-row:1!important}
- #list .row > div:nth-child(2){grid-column:2!important;grid-row:1!important;min-width:0!important}
- #list .row .actions{grid-column:3!important;grid-row:1!important;display:flex!important;justify-content:flex-end!important;align-items:center!important;gap:5px!important;flex-wrap:nowrap!important}
- #list .row .awm-collected{position:static!important;grid-column:4!important;grid-row:1!important;align-self:center!important;justify-self:end!important;display:flex!important;width:84px!important;margin:0!important;padding:0!important;background:transparent!important}
- #list .row .awm-collected .a{width:84px!important;height:28px!important;min-height:28px!important;padding:3px!important;font-size:8px!important;line-height:1.05!important;border-radius:5px!important}
- #list .row .actions .a{flex:0 0 84px!important;width:84px!important;min-width:84px!important;max-width:84px!important;height:28px!important;min-height:28px!important;padding:3px 5px!important;font-size:9px!important;line-height:1.1!important;border-radius:5px!important;white-space:normal!important}
-}
 </style></head><body>
 <header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><div class="workshop-top-actions" style="position:relative;z-index:3;display:flex;flex-direction:column;align-items:stretch;gap:4px;margin:0 8px"><a href="/warsztat" class="workshop-top-link" style="display:block;padding:5px 8px;border:1px solid #29d28c;border-radius:6px;color:#fff;background:#076e4d;text-decoration:none;text-align:center;font-size:10px;font-weight:800;white-space:nowrap">🔧 WARSZTAT</a><a href="/warsztat#rejestrator" aria-label="Otwórz rejestrator głosowy Warsztatu" style="display:block;padding:4px 7px;border:1px solid #65ba9b;border-radius:6px;color:#fff;background:#07563f;text-decoration:none;text-align:center;font-size:9px;font-weight:700;white-space:nowrap">🎙 REJESTRATOR</a></div><div class="who" id="who"><span class="status">● ONLINE</span><span>AWM</span><span class="avatar">W</span></div></header>
 <div class="watermark"><div class="car"></div><div class="awm">AWM</div><div class="wm-sub">DIAGNOSTYKA POJAZDÓW</div></div>
@@ -242,7 +165,7 @@ function aiReq(v){let k=aiReqKey(v),st=localStorage.getItem(k)||'idle',started=N
  if(/elektr|electric|\bev\b|tesla/.test(s)) return '🔌 POJAZD ELEKTRYCZNY';
  return '⛽ POJAZD SPALINOWY';
 }
-function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>{if(k==='wycena_ai'){if(v.show_wycena_ai===false||v.show_wycena_ai===0)return '';let d=v.docs.find(d=>d.kind==='wycena_ai'),vin=String(v.vin||'').toUpperCase(),base={'W1V9076351P430601':108000,'WAUZZZGY2NA027731':110000,'JTNB23HK003139274':80000,'JTNB23HK703108975':61000}[vin],repair={'WAUZZZGY2NA027731':14812}[vin]||0,mv=base?Math.max(0,base-repair):0;return `<button class="a gold aivalbtn" onclick="openAI('${e(v.id)}')"><span>WYCENA AI</span>${mv?`<small>${Number(mv).toLocaleString('pl-PL')} zł</small>`:''}</button>`;}if((k==='opis'&&(v.show_opis===false||v.show_opis===0))||(k==='wycena'&&(v.show_wycena===false||v.show_wycena===0))||(k==='raport'&&(v.show_raport===false||v.show_raport===0))||(k==='soh'&&(v.show_soh===false||v.show_soh===0)))return '';let d=v.docs.find(d=>d.kind===k);if((k==='soh'||k==='opis_2life')&&!d)return '';let pv=(k==='opis'?v.docs.find(x=>x.kind==='opis_pdf'):null);if(!d)return `<div class="a docempty">${k==='opis'?'OPIS':k==='raport'?'RAPORT DIAG':k==='soh'?'RAPORT SOH':k==='opis_2life'?'OPIS 2LIFE':'WYCENA'}<br><small>BRAK DOKUMENTU</small></div>`;return `<button class="a ${k==='opis'?'blue':k==='wycena'?'green':k==='raport'?'dark':k==='soh'?'dark':k==='opis_2life'?'green':''}" onclick="openDoc(${pv?pv.id:d.id},'${e(d.name||k)}',${d.id})">${k==='opis'?'OPIS':k==='wycena'?'WYCENA':k==='soh'?'RAPORT SOH':k==='opis_2life'?'OPIS 2LIFE':'RAPORT DIAG'}</button>`};let pc=(v.photos||[]).length;return `<div class="row"><div class="picwrap">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}${pc?`<span class="photocount">▧ ${pc}</span>`:''}</div><div><div class="vtitle"><b>${e(v.marka)} ${e(v.model)}</b><span class="badge">↗ UDOSTĘPNIONY</span></div><div class="details"><div><div class="label">Rok</div><div class="val">${e(v.rok||'—')}</div></div><div><div class="label">Rejestracja</div><div class="val">${e(v.rej||'—')}</div></div><div><div class="label">VIN</div><div class="val">${e(v.vin||'—')}</div></div><div><div class="label">Przebieg</div><div class="val">${e(v.przebieg||'—')} km</div></div></div><div class="tags"><span class="tag">${driveTag(v)}</span><span class="tag">AWM</span></div></div><div class="actions">${b('opis')}${b('raport')}${b('opis_2life')}</div><div class="awm-collected"><button class="a green" type="button" onclick="confirmVehicleCollected('${e(v.id)}')">✓ POJAZD POBRANY</button></div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
+function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>{if(k==='wycena_ai'){if(v.show_wycena_ai===false||v.show_wycena_ai===0)return '';let d=v.docs.find(d=>d.kind==='wycena_ai'),vin=String(v.vin||'').toUpperCase(),base={'W1V9076351P430601':108000,'WAUZZZGY2NA027731':110000,'JTNB23HK003139274':80000,'JTNB23HK703108975':61000}[vin],repair={'WAUZZZGY2NA027731':14812}[vin]||0,mv=base?Math.max(0,base-repair):0;return `<button class="a gold aivalbtn" onclick="openAI('${e(v.id)}')"><span>WYCENA AI</span>${mv?`<small>${Number(mv).toLocaleString('pl-PL')} zł</small>`:''}</button>`;}if((k==='opis'&&(v.show_opis===false||v.show_opis===0))||(k==='wycena'&&(v.show_wycena===false||v.show_wycena===0))||(k==='raport'&&(v.show_raport===false||v.show_raport===0))||(k==='soh'&&(v.show_soh===false||v.show_soh===0)))return '';let d=v.docs.find(d=>d.kind===k);if((k==='soh'||k==='opis_2life')&&!d)return '';let pv=(k==='opis'?v.docs.find(x=>x.kind==='opis_pdf'):null);if(!d)return `<div class="a docempty">${k==='opis'?'OPIS':k==='raport'?'RAPORT DIAG':k==='soh'?'RAPORT SOH':k==='opis_2life'?'OPIS 2LIFE':'WYCENA'}<br><small>BRAK DOKUMENTU</small></div>`;return `<button class="a ${k==='opis'?'blue':k==='wycena'?'green':k==='raport'?'dark':k==='soh'?'dark':k==='opis_2life'?'green':''}" onclick="openDoc(${pv?pv.id:d.id},'${e(d.name||k)}',${d.id})">${k==='opis'?'OPIS':k==='wycena'?'WYCENA':k==='soh'?'RAPORT SOH':k==='opis_2life'?'OPIS 2LIFE':'RAPORT DIAG'}</button>`};let pc=(v.photos||[]).length;return `<div class="row"><div class="picwrap">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}${pc?`<span class="photocount">▧ ${pc}</span>`:''}</div><div><div class="vtitle"><b>${e(v.marka)} ${e(v.model)}</b><span class="badge">↗ UDOSTĘPNIONY</span></div><div class="details"><div><div class="label">Rok</div><div class="val">${e(v.rok||'—')}</div></div><div><div class="label">Rejestracja</div><div class="val">${e(v.rej||'—')}</div></div><div><div class="label">VIN</div><div class="val">${e(v.vin||'—')}</div></div><div><div class="label">Przebieg</div><div class="val">${e(v.przebieg||'—')} km</div></div></div><div class="tags"><span class="tag">${driveTag(v)}</span><span class="tag">AWM</span></div></div><div class="actions">${b('opis')}${b('raport')}${b('opis_2life')}<button class="a green" type="button" onclick="confirmVehicleCollected('${e(v.id)}')">✓ POJAZD POBRANY</button></div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
 async function openAI(id){
  let v=V.find(x=>String(x.id)===String(id));if(!v)return;
  let img=v.photo?'/file/'+v.photo:'',has=k=>v.docs.some(d=>d.kind===k),doc=v.docs.find(d=>d.kind==='wycena_ai'),q=null;
