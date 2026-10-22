@@ -1,3 +1,23 @@
+
+/* AWM workshop compact two-column repair card; scoped to unlocked live details. */
+#awmLiveDetails .awm-detail-back{margin:12px 0}
+#awmLiveDetails .awm-repair-grid{display:grid;grid-template-columns:minmax(330px, 44%) minmax(0,1fr);gap:14px;align-items:stretch}
+#awmLiveDetails .awm-primary-vehicle{display:grid;grid-template-columns:42% minmax(0,1fr);min-height:142px}
+#awmLiveDetails .awm-primary-vehicle .car-photo{min-height:142px;overflow:hidden}
+#awmLiveDetails .awm-primary-vehicle .vehicle-info{padding:13px;min-width:0}
+#awmLiveDetails .awm-primary-vehicle h2{font-size:18px;overflow-wrap:anywhere}
+#awmLiveDetails .awm-primary-status{font-weight:700;color:#08734c!important}
+#awmLiveDetails .awm-repair-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(42px,1fr));gap:7px;align-content:center}
+#awmLiveDetails .awm-repair-tab{border:1px solid #d5e5db;background:#f5faf7;border-radius:10px;padding:7px 8px;font:600 12px/1.25 'Segoe UI',Arial,sans-serif;color:#174b36;cursor:pointer;text-align:center;min-width:0;overflow-wrap:anywhere}
+#awmLiveDetails .awm-repair-tab:hover,#awmLiveDetails .awm-repair-tab.active{background:#dcefe3;border-color:#67a985}
+#awmLiveDetails .awm-repair-tab:focus-visible{outline:3px solid #e7a640}
+#awmLiveDetails .awm-repair-content{margin-top:12px}
+#awmLiveDetails .awm-repair-panel:not([hidden]){display:block;background:#fff;border:1px solid #dce8df;border-radius:12px;padding:16px}
+#awmLiveDetails .awm-repair-panel h3{margin:0 0 10px;font-size:17px}
+#awmLiveDetails .awm-repair-panel .inner{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:860px){#awmLiveDetails .awm-repair-grid{grid-template-columns:1fr}#awmLiveDetails .awm-repair-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:500px){#awmLiveDetails .awm-repair-tabs{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto}#awmLiveDetails .awm-primary-vehicle{grid-template-columns:38% minmax(0,1fr)}}
+
 /* AWM R42 live workshop cases; demos are replaced only after successful load. */
 (async function(){
  const root=document.getElementById('repairPreview');if(!root)return;
@@ -65,10 +85,26 @@
   const ct=(s.koszty&&typeof s.koszty==='object')?s.koszty:{};
   const sections=[['💬 Usterka zgłoszona przez klienta','usterka',escape(s.usterka)],['🩺 Diagnoza warsztatu','diagnoza',escape(s.diagnoza)],['🛠 Zakres naprawy','zakres',escape(s.zakres)],['📦 Zastosowane części','czesci',parts],['💰 Koszty naprawy','koszty','Części: '+escape(ct.czesci||0)+' zł; robocizna: '+escape(ct.robocizna||0)+' zł; razem: '+escape(ct.razem||0)+' zł'],['📅 Terminy','terminy',escape(JSON.stringify(s.terminy||{}))],['✅ Zgody i akceptacje','zgody',escape(JSON.stringify(s.zgody||{}))]];
   if(s.notatki)sections.push(['📝 Notatki warsztatu','notatki',escape(s.notatki)]);
-  section.innerHTML='<div style="margin:14px 0"><button class="btn back" type="button">← Powrót do pojazdów</button></div>'+
-   '<div class="vehicle-card"><div class="car-photo photo-slot">'+(current.has_photo?'Ładowanie zdjęcia…':'🚘')+'</div><div class="vehicle-info"><h2>'+escape([p.marka,p.model].join(' '))+'</h2><p>VIN: '+escape(p.vin)+' · Rejestracja: '+escape(p.rejestracja)+'</p><p>'+escape(current.repair_no||'')+'</p></div></div>'+
-   (activeStages.length?'<div class="timeline">'+activeStages.map(z=>'<div class="step on"><b>✓</b>'+escape(z.name)+'</div>').join('')+'</div>':'')+'<div class="accordions">'+sections.filter(z=>Object.hasOwn(s,z[1])).map(z=>'<details><summary>'+z[0]+'</summary><div class="inner">'+(z[2]||'Brak danych')+'</div></details>').join('')+'</div>';
-  list.after(section);list.hidden=false;root.querySelector('.awm-workshop-search').hidden=false;selectedHead.textContent='Karta naprawy — '+(current.label||current.repair_no||'Pojazd');section.querySelector('.back').onclick=()=>{section.remove();selectedHead.textContent=originalTitle;};section.scrollIntoView({block:'start',behavior:'smooth'});
-  if(current.has_photo){const img=document.createElement('img');img.alt='Zdjęcie pojazdu';img.src='/api/warsztat/cases/'+v.id+'/photo';img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:6px';const slot=section.querySelector('.photo-slot');slot.innerHTML='';slot.appendChild(img)}
+  const shown=sections.filter(z=>Object.hasOwn(s,z[1])&&z[2]&&z[2].trim()&&z[2]!=='{}');
+  const status=activeStages.at(-1)?.name||'Przyjęty do warsztatu';
+  section.innerHTML='<div class="awm-detail-back"><button class="btn back" type="button">← Powrót do pojazdów</button></div>'+
+   '<div class="awm-repair-grid"><div class="vehicle-card awm-primary-vehicle"><div class="car-photo photo-slot">'+(current.has_photo?'Ładowanie zdjęcia…':'🚘')+'</div><div class="vehicle-info"><h2>'+escape([p.marka,p.model].filter(Boolean).join(' '))+'</h2><p>Rejestracja: '+escape(p.rejestracja||'—')+'</p><p class="awm-primary-status">Status: '+escape(status)+'</p></div></div>'+
+   '<nav class="awm-repair-tabs" aria-label="Sekcje naprawy">'+shown.map((z,i)=>'<button type="button" class="awm-repair-tab" data-section="'+escape(z[1])+'" aria-expanded="false">'+z[0]+'</button>').join('')+'</nav></div>'+
+   '<div class="awm-repair-content" aria-live="polite">'+shown.map(z=>'<div class="awm-repair-panel" data-panel="'+escape(z[1])+'" hidden><h3>'+z[0]+'</h3><div class="inner">'+z[2]+'</div></div>').join('')+'</div>';
+  list.after(section);
+  list.hidden=true;
+  root.querySelector('.awm-workshop-search').hidden=true;
+  selectedHead.textContent='Karta naprawy — '+(current.label||current.repair_no||'Pojazd');
+  section.querySelector('.back').onclick=()=>{section.remove();list.hidden=false;root.querySelector('.awm-workshop-search').hidden=false;selectedHead.textContent=originalTitle;};
+  const tabs=[...section.querySelectorAll('.awm-repair-tab')];
+  const panels=[...section.querySelectorAll('.awm-repair-panel')];
+  tabs.forEach(tab=>tab.addEventListener('click',()=>{
+   const wasOpen=tab.getAttribute('aria-expanded')==='true';
+   tabs.forEach(t=>{t.setAttribute('aria-expanded','false');t.classList.remove('active')});
+   panels.forEach(panel=>panel.hidden=true);
+   if(!wasOpen){tab.setAttribute('aria-expanded','true');tab.classList.add('active');const panel=panels.find(p=>p.dataset.panel===tab.dataset.section);if(panel)panel.hidden=false;}
+  }));
+  if(current.has_photo){const img=document.createElement('img');img.alt='Zdjęcie pojazdu z programu AWM';img.src='/api/warsztat/cases/'+encodeURIComponent(v.id)+'/photo';img.style.cssText='width:100%;height:100%;object-fit:contain';const slot=section.querySelector('.photo-slot');slot.innerHTML='';slot.appendChild(img)}
+  section.scrollIntoView({block:'start',behavior:'smooth'});
  }
 })();
