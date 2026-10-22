@@ -186,6 +186,18 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 }
 #list .row .actions .a.blue{background:#83a5b9!important;color:#fff!important}
 #list .row .actions .a.dark{background:#66736f!important;color:#fff!important}
+
+/* AWM compact single-line vehicle cards v2 */
+@media(min-width:681px){
+ #list .row{grid-template-columns:110px minmax(0,1fr) auto!important;grid-template-rows:70px 34px!important;align-items:center!important;min-height:86px!important;padding:7px 9px!important;position:relative!important;margin-bottom:8px!important}
+ #list .row .picwrap{grid-column:1!important;grid-row:1!important;align-self:center!important}
+ #list .row > div:nth-child(2){grid-column:2!important;grid-row:1!important;align-self:center!important;min-width:0!important}
+ #list .row .actions{grid-column:3!important;grid-row:1!important;align-self:center!important;justify-content:flex-end!important}
+ #list .row .awm-collected{position:absolute!important;left:8px!important;top:calc(100% + 4px)!important;z-index:2!important;width:110px!important;margin:0!important;padding:0!important;background:transparent!important}
+ #list .row .awm-collected .a{min-height:0!important;height:30px!important;font-size:9px!important;line-height:1!important;padding:4px!important;border-radius:7px!important}
+ #list .row{margin-bottom:45px!important}
+}
+#list .row .actions .a{flex:0 0 98px!important;width:98px!important;min-width:98px!important;max-width:98px!important;height:28px!important;min-height:28px!important;padding:4px 6px!important;font-size:10px!important;font-weight:800!important;border-radius:6px!important;box-shadow:0 2px 3px #0005!important}
 </style></head><body>
 <header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><div class="workshop-top-actions" style="position:relative;z-index:3;display:flex;flex-direction:column;align-items:stretch;gap:4px;margin:0 8px"><a href="/warsztat" class="workshop-top-link" style="display:block;padding:5px 8px;border:1px solid #29d28c;border-radius:6px;color:#fff;background:#076e4d;text-decoration:none;text-align:center;font-size:10px;font-weight:800;white-space:nowrap">🔧 WARSZTAT</a><a href="/warsztat#rejestrator" aria-label="Otwórz rejestrator głosowy Warsztatu" style="display:block;padding:4px 7px;border:1px solid #65ba9b;border-radius:6px;color:#fff;background:#07563f;text-decoration:none;text-align:center;font-size:9px;font-weight:700;white-space:nowrap">🎙 REJESTRATOR</a></div><div class="who" id="who"><span class="status">● ONLINE</span><span>AWM</span><span class="avatar">W</span></div></header>
 <div class="watermark"><div class="car"></div><div class="awm">AWM</div><div class="wm-sub">DIAGNOSTYKA POJAZDÓW</div></div>
