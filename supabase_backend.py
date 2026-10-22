@@ -121,7 +121,7 @@ def vehicles():
     out=[]
     for v in vs:
         ds=_rows(sb.table("docs").select("id,kind,name").eq("vehicle_id",v["id"]).order("id",desc=True).execute())
-        allowed={"photo":True,"thumb":True,"opis":v.get("show_opis",True),"opis_pdf":v.get("show_opis",True),"wycena":v.get("show_wycena",True),"raport":v.get("show_raport",True),"wycena_ai":v.get("show_wycena_ai",True),"opis_2life":True}
+        allowed={"photo":True,"thumb":True,"opis":v.get("show_opis",True),"opis_pdf":v.get("show_opis",True),"wycena":v.get("show_wycena",True),"raport":v.get("show_raport",True),"wycena_ai":v.get("show_wycena_ai",True),"opis_2life":v.get("show_opis_2life",True)}
         ds=[d for d in ds if allowed.get(d["kind"],False)]
         x=dict(v); x["docs"]=ds; x["photos"]=[d["id"] for d in ds if d["kind"]=="photo"]; x["photo"]=next((d["id"] for d in ds if d["kind"]=="thumb"),None) or next(iter(x["photos"]),None); out.append(x)
     return jsonify(out)
@@ -177,7 +177,7 @@ def admin_vehicles():
     out=[]
     for v in vs:
         kinds={d["kind"] for d in v["docs"]}
-        x=dict(v); x.update(has_opis="opis" in kinds,has_wycena="wycena" in kinds,has_raport="raport" in kinds,has_wycena_ai="wycena_ai" in kinds)
+        x=dict(v); x.update(has_opis="opis" in kinds,has_wycena="wycena" in kinds,has_raport="raport" in kinds,has_wycena_ai="wycena_ai" in kinds,has_opis_2life="opis_2life" in kinds)
         out.append(x)
     return jsonify(vehicles=out)
 def save_ai_valuation(pid):
@@ -202,8 +202,13 @@ def visibility(pid):
     if not api_ok(): return jsonify(error="bad key"),403
     v=_vehicle(pid)
     if not v:return jsonify(error="not found"),404
-    d=request.get_json(silent=True) or {}; allowed={"opis":"show_opis","wycena":"show_wycena","raport":"show_raport","wycena_ai":"show_wycena_ai"}
+    d=request.get_json(silent=True) or {}; allowed={"opis":"show_opis","wycena":"show_wycena","raport":"show_raport","wycena_ai":"show_wycena_ai","opis_2life":"show_opis_2life"}
     vals={col:bool(d[k]) for k,col in allowed.items() if k in d}
+    if "show_opis_2life" in vals:
+        try:
+            sb.table("vehicles").select("show_opis_2life").limit(1).execute()
+        except Exception:
+            return jsonify(error="Missing show_opis_2life column; apply database migration"),503
     if vals: sb.table("vehicles").update(vals).eq("id",v["id"]).execute()
     return jsonify(ok=True)
 def add_document(pid,kind):
