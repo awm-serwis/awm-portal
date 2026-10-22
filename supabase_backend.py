@@ -121,7 +121,7 @@ def vehicles():
     out=[]
     for v in vs:
         ds=_rows(sb.table("docs").select("id,kind,name").eq("vehicle_id",v["id"]).order("id",desc=True).execute())
-        allowed={"photo":True,"thumb":True,"opis":v.get("show_opis",True),"opis_pdf":v.get("show_opis",True),"wycena":v.get("show_wycena",True),"raport":v.get("show_raport",True),"wycena_ai":v.get("show_wycena_ai",True)}
+        allowed={"photo":True,"thumb":True,"opis":v.get("show_opis",True),"opis_pdf":v.get("show_opis",True),"wycena":v.get("show_wycena",True),"raport":v.get("show_raport",True),"wycena_ai":v.get("show_wycena_ai",True),"opis_2life":True}
         ds=[d for d in ds if allowed.get(d["kind"],False)]
         x=dict(v); x["docs"]=ds; x["photos"]=[d["id"] for d in ds if d["kind"]=="photo"]; x["photo"]=next((d["id"] for d in ds if d["kind"]=="thumb"),None) or next(iter(x["photos"]),None); out.append(x)
     return jsonify(out)
@@ -208,7 +208,7 @@ def visibility(pid):
     return jsonify(ok=True)
 def add_document(pid,kind):
     if not api_ok():return jsonify(error="bad key"),403
-    if kind not in ("opis","opis_pdf","wycena","raport","wycena_ai"):return jsonify(error="kind"),400
+    if kind not in ("opis","opis_pdf","wycena","raport","wycena_ai","opis_2life"):return jsonify(error="kind"),400
     v=_vehicle(pid)
     if not v:return jsonify(error="not found"),404
     name=Path(request.args.get("name") or request.headers.get("X-Filename",kind+".pdf")).name
@@ -244,7 +244,9 @@ def add_document(pid,kind):
             preview_stored=_store(v["id"],pid,"opis_pdf",preview_file)
             if not preview_stored: return jsonify(error="preview metadata not stored"),500
         show_key="show_opis" if kind=="opis_pdf" else "show_"+kind
-        sb.table("vehicles").update({show_key:True,"updated":datetime.now().isoformat(timespec="seconds")}).eq("id",v["id"]).execute()
+        changes={"updated":datetime.now().isoformat(timespec="seconds")}
+        if kind!="opis_2life": changes[show_key]=True
+        sb.table("vehicles").update(changes).eq("id",v["id"]).execute()
         return jsonify(ok=True,size=len(data),doc_id=stored.get("id") if isinstance(stored,dict) else None,preview_id=preview_stored.get("id") if isinstance(preview_stored,dict) else None,preview_generated=bool(preview_stored))
     finally: shutil.rmtree(td,ignore_errors=True)
 def expire(pid):
