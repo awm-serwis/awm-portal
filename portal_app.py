@@ -132,6 +132,21 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 /* AWM AI valuation amount under button */
 .actions .aivalbtn{height:auto!important;min-height:34px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;line-height:1.05!important;padding:5px 10px!important}
 .actions .aivalbtn small{display:block!important;margin-top:3px!important;color:#d61f1f!important;font-size:11px!important;font-weight:900!important;line-height:1!important}
+
+/* AWM: refined original buttons — typography and corners only */
+#list .row .actions .a{
+ border-radius:7px!important;
+ font-family:Arial,Helvetica,sans-serif!important;
+ font-size:11px!important;
+ font-weight:800!important;
+ line-height:1.1!important;
+ letter-spacing:0!important;
+ text-shadow:none!important;
+ text-rendering:optimizeLegibility!important;
+ box-shadow:0 2px 3px rgba(0,0,0,.28)!important;
+ border:1px solid rgba(35,58,52,.32)!important;
+}
+#list .row .actions .a.green{font-size:9px!important;line-height:1.05!important;white-space:normal!important}
 </style></head><body>
 <header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><div class="workshop-top-actions" style="position:relative;z-index:3;display:flex;flex-direction:column;align-items:stretch;gap:4px;margin:0 8px"><a href="/warsztat" class="workshop-top-link" style="display:block;padding:5px 8px;border:1px solid #29d28c;border-radius:6px;color:#fff;background:#076e4d;text-decoration:none;text-align:center;font-size:10px;font-weight:800;white-space:nowrap">🔧 WARSZTAT</a><a href="/warsztat#rejestrator" aria-label="Otwórz rejestrator głosowy Warsztatu" style="display:block;padding:4px 7px;border:1px solid #65ba9b;border-radius:6px;color:#fff;background:#07563f;text-decoration:none;text-align:center;font-size:9px;font-weight:700;white-space:nowrap">🎙 REJESTRATOR</a></div><div class="who" id="who"><span class="status">● ONLINE</span><span>AWM</span><span class="avatar">W</span></div></header>
 <div class="watermark"><div class="car"></div><div class="awm">AWM</div><div class="wm-sub">DIAGNOSTYKA POJAZDÓW</div></div>
