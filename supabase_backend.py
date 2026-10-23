@@ -208,7 +208,10 @@ def visibility(pid):
         try:
             sb.table("vehicles").select("show_opis_2life").limit(1).execute()
         except Exception:
-            return jsonify(error="Missing show_opis_2life column; apply database migration"),503
+            # Keep other visibility settings functional until the database migration is applied.
+            vals.pop("show_opis_2life",None)
+            if vals: sb.table("vehicles").update(vals).eq("id",v["id"]).execute()
+            return jsonify(ok=False,error="Brak kolumny show_opis_2life w Supabase. Pozostale ustawienia zapisano; widocznosc 2LIFE wymaga migracji SQL."),409
     if vals: sb.table("vehicles").update(vals).eq("id",v["id"]).execute()
     return jsonify(ok=True)
 def add_document(pid,kind):
