@@ -1236,6 +1236,10 @@ def awm_workshop_requests_redirect():
     return Response(status=302, headers={'Location': '/warsztat'})
 
 
+# AWM Mobile OTA — niezależne od aktualizacji AWM PRO.
+from mobile_updates import register_mobile_updates
+register_mobile_updates(app)
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '10000'))
     app.run(host='0.0.0.0', port=port, debug=False)
