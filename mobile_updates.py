@@ -2,6 +2,7 @@
 import hashlib
 import io
 import json
+import logging
 import os
 import re
 import zipfile
@@ -23,21 +24,28 @@ def register_mobile_updates(app):
     def manifest_data():
         try:
             raw = storage().download("manifest.json")
+        except Exception as exc:
+            app.logger.exception("AWM Mobile: nie mozna odczytac manifest.json z Supabase")
+            raise RuntimeError("Nie mozna odczytac manifestu z Supabase") from exc
+        try:
             data = json.loads(raw.decode("utf-8"))
             if (not isinstance(data, dict)
                     or not isinstance(data.get("build"), int)
                     or not re.fullmatch(r"[a-f0-9]{64}", str(data.get("sha256", "")))
-                    or not str(data.get("path", "")).startswith("packages/")):
-                return None
+                    or not str(data.get("path", "")).startswith("packages/")
+                    or not isinstance(data.get("version"), str)):
+                raise ValueError("Nieprawidlowy format manifestu")
             return data
-        except Exception:
-            return None
+        except (UnicodeError, ValueError, TypeError) as exc:
+            app.logger.exception("AWM Mobile: uszkodzony manifest.json")
+            raise RuntimeError("Nieprawidlowy manifest aktualizacji") from exc
 
     @app.get("/api/awm-flutter/manifest.json")
     def awm_mobile_manifest():
-        data = manifest_data()
-        if data is None:
-            return jsonify(error="Nie opublikowano jeszcze aktualizacji AWM Mobile"), 404
+        try:
+            data = manifest_data()
+        except RuntimeError:
+            return jsonify(error="Manifest aktualizacji niedostepny; sprawdz logi serwera AWM Portal"), 503
         return jsonify(
             version=data["version"],
             build=data["build"],
@@ -48,9 +56,10 @@ def register_mobile_updates(app):
 
     @app.get("/api/awm-flutter/package.apk")
     def awm_mobile_package():
-        data = manifest_data()
-        if data is None:
-            return jsonify(error="Brak opublikowanego APK"), 404
+        try:
+            data = manifest_data()
+        except RuntimeError:
+            return jsonify(error="Manifest aktualizacji niedostepny"), 503
         try:
             payload = storage().download(data["path"])
             if hashlib.sha256(payload).hexdigest() != data["sha256"]:
@@ -101,7 +110,10 @@ catch(ex){el.textContent='Błąd połączenia: '+ex.message;}};</script></html>"
             return jsonify(error="Nieprawidłowy numer kompilacji"), 400
         if build <= 103:
             return jsonify(error="Numer kompilacji musi być większy niż 103"), 400
-        current = manifest_data()
+        try:
+            current = manifest_data()
+        except RuntimeError:
+            current = None
         if current is not None and build <= current["build"]:
             return jsonify(error="Nowa kompilacja musi być nowsza od opublikowanej"), 409
         uploaded = request.files.get("package")
