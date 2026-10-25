@@ -94,7 +94,7 @@ Nowy manifest pojawi się dopiero po weryfikacji pliku na serwerze.</p>
 <script>document.getElementById('f').onsubmit=async e=>{
 e.preventDefault();const el=document.getElementById('result');el.textContent='Przesyłanie APK…';
 try{const r=await fetch('/api/admin/awm-flutter/publish',{method:'POST',body:new FormData(e.target)});
-const d=await r.json();el.textContent=d.ok?'Opublikowano '+d.version+' ('+d.build+')':(d.error||'Błąd publikacji');}
+const body=await r.text();let d;try{d=JSON.parse(body)}catch(_){throw Error('Serwer zwrócił HTTP '+r.status+' zamiast JSON. '+(r.status===502||r.status===504?'Przekroczono czas przetwarzania APK.':'Sprawdź logi Render.'))}el.textContent=d.ok?'Opublikowano '+d.version+' ('+d.build+')':('HTTP '+r.status+': '+(d.error||'Błąd publikacji'));}
 catch(ex){el.textContent='Błąd połączenia: '+ex.message;}};</script></html>""", mimetype="text/html")
 
     @app.post("/api/admin/awm-flutter/publish")
