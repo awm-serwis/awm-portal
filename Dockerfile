@@ -8,4 +8,4 @@ COPY requirements-portal.txt .
 RUN pip install --no-cache-dir -r requirements-portal.txt
 COPY . .
 ENV PORT=10000
-CMD ["sh","-c","gunicorn --bind 0.0.0.0:$PORT portal_app:app"]
+CMD ["sh","-c","gunicorn --timeout 300 --graceful-timeout 30 --bind 0.0.0.0:$PORT portal_app:app"]
