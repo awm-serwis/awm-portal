@@ -49,7 +49,8 @@ def register_mobile_updates(app):
             return jsonify(error="Manifest aktualizacji niedostepny; sprawdz logi serwera AWM Portal"), 503
         response = jsonify(
             version=data["version"],
-            build=data["build"],
+            build=data["build"] + 2000,  # Android ARM64 split APK uses ABI_VERSION*1000 offset
+            release_build=data["build"],
             notes=data.get("notes", ""),
             android_url=request.url_root.rstrip("/") + "/api/awm-flutter/package.apk?direct=1",
             android_sha256=data["sha256"],
