@@ -6,12 +6,14 @@ import logging
 import os
 import re
 import zipfile
+from urllib.request import urlopen
 from urllib.parse import urljoin, urlsplit
 
-from flask import Response, jsonify, request, send_file, session
+from flask import Response, jsonify, request, send_file, session, stream_with_context
 
 BUCKET = "awm-mobile-updates"
-MAX_APK_BYTES = 50_000_000  # Supabase limit per file; same as GitHub Actions
+MAX_APK_BYTES = 160_000_000  # maximum whole release size
+MAX_CHUNK_BYTES = 20_000_000  # safely below the 50 MB Supabase per-object cap
 
 
 def register_mobile_updates(app):
@@ -36,6 +38,23 @@ def register_mobile_updates(app):
                     or not str(data.get("path", "")).startswith("packages/")
                     or not isinstance(data.get("version"), str)):
                 raise ValueError("Nieprawidlowy format manifestu")
+            chunks = data.get("chunks")
+            if chunks is not None:
+                if (not isinstance(chunks, list) or not 1 <= len(chunks) <= 8
+                        or not isinstance(data.get("size"), int)
+                        or not 0 < data["size"] <= MAX_APK_BYTES):
+                    raise ValueError("Nieprawidlowy manifest podzielonego APK")
+                total = 0
+                for chunk in chunks:
+                    if (not isinstance(chunk, dict)
+                            or not re.fullmatch(r"packages/[A-Za-z0-9_.-]+", str(chunk.get("path", "")))
+                            or not isinstance(chunk.get("size"), int)
+                            or not 0 < chunk["size"] <= MAX_CHUNK_BYTES
+                            or not re.fullmatch(r"[a-f0-9]{64}", str(chunk.get("sha256", "")))):
+                        raise ValueError("Nieprawidlowy fragment aktualizacji")
+                    total += chunk["size"]
+                if total != data["size"]:
+                    raise ValueError("Niezgodny calkowity rozmiar aktualizacji")
             return data
         except (UnicodeError, ValueError, TypeError) as exc:
             app.logger.exception("AWM Mobile: uszkodzony manifest.json")
@@ -64,6 +83,62 @@ def register_mobile_updates(app):
             data = manifest_data()
         except RuntimeError:
             return jsonify(error="Manifest aktualizacji niedostepny"), 503
+        if data.get("chunks"):
+            # Supabase Free limits one OBJECT to 50 MB. Stream the verified
+            # 20 MB pieces as one original APK, without holding it in Render RAM.
+            # The Android client also checks the full APK SHA-256 from manifest.
+            try:
+                urls = []
+                base_url = os.environ["SUPABASE_URL"].rstrip("/") + "/"
+                for chunk in data["chunks"]:
+                    signed = storage().create_signed_url(chunk["path"], 1800)
+                    raw_url = signed.get("signedURL") or signed.get("signedUrl")
+                    if not raw_url:
+                        raise RuntimeError("Brak adresu fragmentu APK")
+                    target = urljoin(base_url, raw_url)
+                    parsed_target, parsed_base = urlsplit(target), urlsplit(base_url)
+                    if parsed_target.scheme != "https" or parsed_target.hostname != parsed_base.hostname:
+                        raise RuntimeError("Nieprawidlowy adres fragmentu APK")
+                    urls.append(target)
+
+                def package_stream():
+                    whole_digest = hashlib.sha256()
+                    for chunk, url in zip(data["chunks"], urls):
+                        chunk_digest = hashlib.sha256()
+                        count = 0
+                        try:
+                            with urlopen(url, timeout=90) as source:
+                                if source.status != 200:
+                                    raise IOError("Supabase nie udostepnil fragmentu")
+                                while True:
+                                    block = source.read(256 * 1024)
+                                    if not block:
+                                        break
+                                    count += len(block)
+                                    chunk_digest.update(block)
+                                    whole_digest.update(block)
+                                    yield block
+                        except Exception:
+                            app.logger.exception("AWM Mobile: przerwany transfer fragmentu APK")
+                            raise
+                        if count != chunk["size"] or chunk_digest.hexdigest() != chunk["sha256"]:
+                            raise IOError("Niezgodny rozmiar lub SHA-256 fragmentu APK")
+                    if whole_digest.hexdigest() != data["sha256"]:
+                        raise IOError("Niezgodny SHA-256 calego APK")
+
+                return Response(
+                    stream_with_context(package_stream()),
+                    mimetype="application/vnd.android.package-archive",
+                    headers={
+                        "Content-Disposition": 'attachment; filename="AWM-Mobile-' + data["version"] + '.apk"',
+                        "Content-Length": str(data["size"]),
+                        "Cache-Control": "no-store, max-age=0",
+                        "X-Content-Type-Options": "nosniff",
+                    },
+                )
+            except Exception:
+                app.logger.exception("AWM Mobile: nie mozna przygotowac transferu fragmentow")
+                return jsonify(error="Fragmenty aktualizacji niedostepne"), 503
         # Large APKs must not pass through Render memory. The tablet already
         # verifies the final file against SHA-256 supplied by the manifest.
         # Signed URLs also let Android use HTTP Range/resume on Supabase directly.
@@ -145,7 +220,7 @@ catch(ex){el.textContent='Błąd połączenia: '+ex.message;}};</script></html>"
             return jsonify(error="Brak pliku APK"), 400
         payload = uploaded.read(MAX_APK_BYTES + 1)
         if not payload or len(payload) > MAX_APK_BYTES:
-            return jsonify(error="APK jest pusty lub przekracza limit Supabase 50 MB. Wybierz plik ARM64."), 413
+            return jsonify(error="APK jest pusty lub przekracza maksymalny rozmiar 160 MB."), 413
         try:
             with zipfile.ZipFile(io.BytesIO(payload)) as apk:
                 names = set(apk.namelist())
@@ -165,13 +240,28 @@ catch(ex){el.textContent='Błąd połączenia: '+ex.message;}};</script></html>"
             if sb is None:
                 raise RuntimeError("Supabase niedostępna")
             try:
-                sb.storage.create_bucket(BUCKET, options={"public": False, "file_size_limit": MAX_APK_BYTES})
+                sb.storage.create_bucket(BUCKET, options={"public": False, "file_size_limit": MAX_CHUNK_BYTES})
             except Exception:
                 pass
             store = sb.storage.from_(BUCKET)
-            store.upload(path, payload, {"content-type": "application/vnd.android.package-archive"})
-            if hashlib.sha256(store.download(path)).hexdigest() != digest:
-                raise RuntimeError("Niezgodna suma SHA-256 po przesłaniu")
+            if len(payload) <= MAX_CHUNK_BYTES:
+                store.upload(path, payload, {"content-type": "application/vnd.android.package-archive"})
+                if hashlib.sha256(store.download(path)).hexdigest() != digest:
+                    raise RuntimeError("Niezgodna suma SHA-256 po przesłaniu")
+            else:
+                chunks = []
+                for index, start in enumerate(range(0, len(payload), MAX_CHUNK_BYTES)):
+                    part = payload[start:start + MAX_CHUNK_BYTES]
+                    part_path = path + ".part%02d" % index
+                    part_sha = hashlib.sha256(part).hexdigest()
+                    store.upload(part_path, part, {"content-type": "application/octet-stream"})
+                    if hashlib.sha256(store.download(part_path)).hexdigest() != part_sha:
+                        raise RuntimeError("Niezgodna suma SHA-256 fragmentu %s" % index)
+                    chunks.append(dict(path=part_path, size=len(part), sha256=part_sha))
+                manifest["size"] = len(payload)
+                manifest["chunks"] = chunks
+            # Atomically switch clients to the new release only once every
+            # uploaded fragment has passed the integrity check.
             store.upload("manifest.json", json.dumps(manifest).encode("utf-8"),
                          {"content-type": "application/json", "upsert": "true"})
             return jsonify(ok=True, version=version, build=build, sha256=digest)
