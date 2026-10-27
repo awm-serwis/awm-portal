@@ -6,11 +6,12 @@ import logging
 import os
 import re
 import zipfile
+from urllib.parse import urljoin, urlsplit
 
 from flask import Response, jsonify, request, send_file, session
 
 BUCKET = "awm-mobile-updates"
-MAX_APK_BYTES = 160 * 1024 * 1024
+MAX_APK_BYTES = 50_000_000  # Supabase limit per file; same as GitHub Actions
 
 
 def register_mobile_updates(app):
@@ -46,13 +47,15 @@ def register_mobile_updates(app):
             data = manifest_data()
         except RuntimeError:
             return jsonify(error="Manifest aktualizacji niedostepny; sprawdz logi serwera AWM Portal"), 503
-        return jsonify(
+        response = jsonify(
             version=data["version"],
             build=data["build"],
             notes=data.get("notes", ""),
-            android_url=request.url_root.rstrip("/") + "/api/awm-flutter/package.apk",
+            android_url=request.url_root.rstrip("/") + "/api/awm-flutter/package.apk?direct=1",
             android_sha256=data["sha256"],
         )
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        return response
 
     @app.get("/api/awm-flutter/package.apk")
     def awm_mobile_package():
@@ -60,6 +63,25 @@ def register_mobile_updates(app):
             data = manifest_data()
         except RuntimeError:
             return jsonify(error="Manifest aktualizacji niedostepny"), 503
+        # Large APKs must not pass through Render memory. The tablet already
+        # verifies the final file against SHA-256 supplied by the manifest.
+        # Signed URLs also let Android use HTTP Range/resume on Supabase directly.
+        if request.args.get("direct") == "1":
+            try:
+                signed = storage().create_signed_url(data["path"], 1800, {"download": True})
+                raw_url = signed.get("signedURL") or signed.get("signedUrl")
+                if not raw_url:
+                    raise RuntimeError("Supabase nie zwrócił podpisanego adresu APK")
+                base_url = os.environ["SUPABASE_URL"].rstrip("/") + "/"
+                target = urljoin(base_url, raw_url)
+                parsed_target, parsed_base = urlsplit(target), urlsplit(base_url)
+                if parsed_target.scheme != "https" or parsed_target.hostname != parsed_base.hostname:
+                    raise RuntimeError("Nieprawidłowy adres pobierania z Supabase")
+                response = Response(status=302, headers={"Location": target})
+                response.headers["Cache-Control"] = "no-store, max-age=0"
+                return response
+            except Exception:
+                app.logger.exception("AWM Mobile: nie mozna utworzyc linku pobierania APK; uzywam trybu zgodnosci")
         try:
             payload = storage().download(data["path"])
             if hashlib.sha256(payload).hexdigest() != data["sha256"]:
@@ -71,6 +93,7 @@ def register_mobile_updates(app):
                 download_name="AWM-Mobile-" + data["version"] + ".apk",
             )
         except Exception:
+            app.logger.exception("AWM Mobile: blad pobierania APK z Supabase")
             return jsonify(error="APK chwilowo niedostępne"), 503
 
     @app.get("/admin/awm-mobile-aktualizacje")
@@ -121,7 +144,7 @@ catch(ex){el.textContent='Błąd połączenia: '+ex.message;}};</script></html>"
             return jsonify(error="Brak pliku APK"), 400
         payload = uploaded.read(MAX_APK_BYTES + 1)
         if not payload or len(payload) > MAX_APK_BYTES:
-            return jsonify(error="APK jest pusty lub przekracza 160 MiB"), 413
+            return jsonify(error="APK jest pusty lub przekracza limit Supabase 50 MB. Wybierz plik ARM64."), 413
         try:
             with zipfile.ZipFile(io.BytesIO(payload)) as apk:
                 names = set(apk.namelist())
