@@ -212,6 +212,11 @@ def install_access_control(app):
     @app.before_request
     def check_disabled_reviewer():
         u=session.get("user")
+        # Warsztat accounts are not inspection-portal accounts.
+        if isinstance(u,dict) and u.get("role") in ("workshop","workshop_disabled"):
+            session.clear()
+            if request.path.startswith("/api/"): return jsonify(error="Konto Warsztatu nie ma dostępu do Przeglądów"),403
+            return Response("Konto Warsztatu nie ma dostępu do Przeglądów.",status=403)
         if not isinstance(u,dict) or u.get("role") not in ("reviewer","disabled","admin","admin_disabled"): return None
         if request.path.startswith("/static/") or request.path=="/health": return None
         try:
@@ -233,6 +238,11 @@ def install_access_control(app):
             path=request.path
             if path=="/api/login" and request.method=="POST":
                 payload=request.get_json(silent=True) or {}
+                account=session.get("user")
+                if isinstance(account,dict) and account.get("role") in ("workshop","workshop_disabled"):
+                    session.clear()
+                    response=jsonify(error="Konto Warsztatu nie ma dostępu do Przeglądów")
+                    response.status_code=403
                 audit("login",login=payload.get("login",""),success=response.status_code<400)
             elif path=="/api/logout" and request.method=="POST": audit("logout")
             elif response.status_code<400 and request.method=="GET" and (
