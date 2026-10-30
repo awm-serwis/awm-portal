@@ -125,19 +125,33 @@ def install_access_control(app):
         if not found:return jsonify(error="Nie znaleziono konta"),404
         target=found[0]
         operation=data.get("action")
-        if target.get("role")=="admin":
-            if operation!="delete": return jsonify(error="Konto administratora: dozwolone tylko usuniecie"),403
-            if not desktop_key_ok(): return jsonify(error="Usuwanie administratora tylko w programie AWM"),403
+        role=target.get("role")
+        if role in ("admin","admin_disabled") and not desktop_key_ok():
+            return jsonify(error="Konta administratorow mozna edytowac tylko w programie AWM"),403
+        if operation=="delete" and role in ("admin","admin_disabled"):
             if str(data.get("confirm_admin") or "")!="USUN ADMINISTRATORA":
                 return jsonify(error="Potwierdz trwale usuniecie administratora"),400
-            if sum(1 for a in list_accounts() if a.get("role")=="admin")<2:
-                return jsonify(error="To ostatni administrator. Najpierw dodaj drugiego w programie AWM."),409
+        if operation in ("delete","disable","role") and role=="admin":
+            remaining=sum(1 for a in list_accounts() if a.get("role")=="admin" and int(a["id"])!=uid)
+            newrole=str(data.get("role") or "") if operation=="role" else ""
+            if remaining<1 and (operation!="role" or newrole!="admin"):
+                return jsonify(error="To ostatni aktywny administrator. Dodaj drugiego, potem wykonaj operacje."),409
         try:
             if operation=="delete":
                 if str(data.get("confirm_login") or "")!=str(target["login"]):
                     return jsonify(error="Potwierdz dokladny login usuwanego konta"),400
                 delete_account(uid,target["login"])
-            elif operation in ("disable","enable"): change_account(uid,role=("disabled" if operation=="disable" else "reviewer"))
+            elif operation=="disable":
+                if role in ("disabled","admin_disabled"):return jsonify(error="Konto juz jest zablokowane"),409
+                change_account(uid,role=("admin_disabled" if role=="admin" else "disabled"))
+            elif operation=="enable":
+                if role not in ("disabled","admin_disabled"):return jsonify(error="Konto nie jest zablokowane"),409
+                change_account(uid,role=("admin" if role=="admin_disabled" else "reviewer"))
+            elif operation=="role":
+                if not desktop_key_ok():return jsonify(error="Zmiana roli tylko w programie AWM"),403
+                newrole=str(data.get("role") or "")
+                if newrole not in ("admin","reviewer"):return jsonify(error="Nieprawidlowa rola"),400
+                change_account(uid,role=newrole)
             elif operation=="label":
                 label=str(data.get("label") or "").strip()[:100]
                 c=audit_db()
@@ -147,7 +161,8 @@ def install_access_control(app):
                 finally: c.close()
             elif operation=="password":
                 password=str(data.get("password") or "")
-                if not 6<=len(password)<=128:return jsonify(error="Haslo musi miec co najmniej 6 znakow"),400
+                minlen=12 if role in ("admin","admin_disabled") else 6
+                if not minlen<=len(password)<=128:return jsonify(error="Haslo musi miec co najmniej "+str(minlen)+" znakow"),400
                 change_account(uid,**{"pass":ph(password)})
             else:return jsonify(error="Nieznana operacja"),400
         except Exception:
@@ -191,12 +206,12 @@ def install_access_control(app):
     @app.before_request
     def check_disabled_reviewer():
         u=session.get("user")
-        if not isinstance(u,dict) or u.get("role") not in ("reviewer","disabled","admin"): return None
+        if not isinstance(u,dict) or u.get("role") not in ("reviewer","disabled","admin","admin_disabled"): return None
         if request.path.startswith("/static/") or request.path=="/health": return None
         try:
             uid=u.get("id")
             current=next((r for r in list_accounts() if str(r["id"])==str(uid)),None)
-            if not current or current.get("role")!=u.get("role") or str(current.get("login"))!=str(u.get("login")) or current.get("role")=="disabled":
+            if not current or current.get("role")!=u.get("role") or str(current.get("login"))!=str(u.get("login")) or current.get("role") in ("disabled","admin_disabled"):
                 audit("session_revoked")
                 session.clear()
                 if request.path.startswith("/api/"): return jsonify(error="Dostep zostal wycofany"),401
