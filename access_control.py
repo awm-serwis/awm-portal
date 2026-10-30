@@ -85,7 +85,7 @@ def install_access_control(app):
         denied=guard(write=request.method!="GET")
         if denied: return denied
         if request.method=="GET":
-            accounts=list_accounts()
+            accounts=[u for u in list_accounts() if u.get("role") not in ("workshop","workshop_disabled","workshop_guest","workshop_guest_disabled")]
             c=audit_db()
             try: labels={r["login"]:r["label"] for r in c.execute("SELECT login,label FROM reviewer_labels")}
             finally: c.close()
@@ -121,7 +121,7 @@ def install_access_control(app):
             return jsonify(ok=True),201
         try: uid=int(data.get("id"))
         except (ValueError,TypeError): return jsonify(error="Niepoprawne ID"),400
-        found=[x for x in list_accounts() if int(x["id"])==uid]
+        found=[x for x in list_accounts() if int(x["id"])==uid and x.get("role") not in ("workshop","workshop_disabled","workshop_guest","workshop_guest_disabled")]
         if not found:return jsonify(error="Nie znaleziono konta"),404
         target=found[0]
         operation=data.get("action")
@@ -213,7 +213,7 @@ def install_access_control(app):
     def check_disabled_reviewer():
         u=session.get("user")
         # Warsztat accounts are not inspection-portal accounts.
-        if isinstance(u,dict) and u.get("role") in ("workshop","workshop_disabled"):
+        if isinstance(u,dict) and u.get("role") in ("workshop","workshop_disabled","workshop_guest","workshop_guest_disabled"):
             session.clear()
             if request.path.startswith("/api/"): return jsonify(error="Konto Warsztatu nie ma dostępu do Przeglądów"),403
             return Response("Konto Warsztatu nie ma dostępu do Przeglądów.",status=403)
@@ -239,7 +239,7 @@ def install_access_control(app):
             if path=="/api/login" and request.method=="POST":
                 payload=request.get_json(silent=True) or {}
                 account=session.get("user")
-                if isinstance(account,dict) and account.get("role") in ("workshop","workshop_disabled"):
+                if isinstance(account,dict) and account.get("role") in ("workshop","workshop_disabled","workshop_guest","workshop_guest_disabled"):
                     session.clear()
                     response=jsonify(error="Konto Warsztatu nie ma dostępu do Przeglądów")
                     response.status_code=403
