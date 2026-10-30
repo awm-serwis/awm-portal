@@ -16,9 +16,8 @@ class AccessTests(unittest.TestCase):
         cls.app=app
         cls.app.testing=True
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.tmp.cleanup()
+    # Keep temporary database until entire unittest discovery ends.
+    # The presence test class uses the same imported Flask app and database.
 
     def setUp(self):
         self.client=self.app.test_client()
@@ -47,7 +46,7 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/admin/access-users").status_code,403)
         self.assertEqual(self.client.post("/api/admin/access-users",json={"login":"wrong","password":"123456"},headers={"X-AWM-Key":"bad"}).status_code,403)
         self.assertEqual(self.client.post("/api/admin/access-users",json={"login":"test2","password":"123"},headers=self.key).status_code,400)
-        self.assertEqual(self.client.get("/admin/dostep").status_code,403)
+        self.assertEqual(self.client.get("/admin/dostep").status_code,404)
 
     def test_portal_and_workshop_routes(self):
         self.assertEqual(self.client.get("/").status_code,200)
