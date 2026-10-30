@@ -230,8 +230,8 @@ def me():
         finally: con.close()
     except sqlite3.OperationalError:
         pass
-    first=(label.split()[0] if label else login)
-    result['display_name']=first[:60]
+    display_name=(label if label else login)
+    result['display_name']=display_name[:100]
     return jsonify(user=result)
 @app.post('/api/login')
 def login():
