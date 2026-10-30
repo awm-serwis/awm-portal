@@ -289,7 +289,7 @@ def me():
         pass
     # Najpierw imie nadane przez administratora w AWM.
     # Nazwy domyslne maja zastosowanie tylko do trzech ustalonych kont.
-    known_names={'marca':'Marcin','domin':'Dominik','tobik':'Tobiasz','tobi':'Tobiasz'}
+    known_names={'marca':'Marcin','domin':'Dominik','tobik':'Tobiasz','tobi':'Tobiasz','awm':'Wojciech'}
     display_name=label or known_names.get(login.casefold(),'')
     result['display_name']=display_name[:100]
     return jsonify(user=result)
