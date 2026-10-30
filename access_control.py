@@ -151,7 +151,13 @@ def install_access_control(app):
                 if not desktop_key_ok():return jsonify(error="Zmiana roli tylko w programie AWM"),403
                 newrole=str(data.get("role") or "")
                 if newrole not in ("admin","reviewer"):return jsonify(error="Nieprawidlowa rola"),400
-                change_account(uid,role=newrole)
+                if newrole=="admin" and role not in ("admin","admin_disabled"):
+                    password=str(data.get("password") or "")
+                    if not 12<=len(password)<=128:
+                        return jsonify(error="Nowy administrator musi ustawic haslo min. 12 znakow"),400
+                    change_account(uid,role="admin",**{"pass":ph(password)})
+                else:
+                    change_account(uid,role=newrole)
             elif operation=="label":
                 label=str(data.get("label") or "").strip()[:100]
                 c=audit_db()
