@@ -121,16 +121,11 @@ def install_access_control(app):
             return jsonify(error="Nie udalo sie zmienic konta"),503
         audit("account_"+str(operation),resource=target["login"])
         return jsonify(ok=True)
-    @app.get("/admin/dostep")
-    def access_panel():
-        denied=guard()
-        if denied: return Response("Brak uprawnien administratora", status=403)
-        return Response((Path(__file__).resolve().parent/"access_admin.html").read_text(encoding="utf-8"), mimetype="text/html")
-
     @app.get("/api/admin/access-events")
     def admin_access_events():
-        denied=guard()
-        if denied:return denied
+        key=request.headers.get("X-AWM-Key","")
+        if API_KEY=="AWM-CHANGE-ME" or not key or not hmac.compare_digest(key,API_KEY):
+            return jsonify(error="Historia dostepna tylko w programie AWM"),403
         c=audit_db()
         try: rows=[dict(r) for r in c.execute("SELECT created,login,event,resource,ip,success FROM events ORDER BY id DESC LIMIT 300")]
         finally:c.close()
