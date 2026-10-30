@@ -7,7 +7,7 @@ def install(app):
     from supabase_backend import sb
     BUCKET = os.getenv('SUPABASE_BUCKET', 'awm-files')
     def admin():
-        return (session.get('user') or {}).get('role') == 'admin'
+        return (session.get('user') or {}).get('role') in ('admin', 'workshop')
     def api():
         key=os.getenv('AWM_API_KEY','AWM-CHANGE-ME')
         return key!='AWM-CHANGE-ME' and hmac.compare_digest(request.headers.get('X-AWM-Key',''), key)
