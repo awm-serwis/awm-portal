@@ -154,15 +154,15 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 /* AWM: belka nawigacyjna i powitanie – stabilny uklad desktop/mobile. */
 .awm-nav-bar{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:10px;padding:10px 12px;background:#f1f7f4;border-bottom:1px solid #cbded3;min-height:58px}
 .awm-nav-bar a{flex-shrink:0}
-.awm-nav-bar #awmWelcome{display:none;margin-left:auto;margin-right:76px;max-width:calc(100% - 20px);min-width:0;color:#07563f;font-family:Georgia,'Times New Roman',serif;font-size:clamp(15px,1.8vw,19px);font-weight:700;font-style:italic;line-height:1.3;text-align:right;white-space:normal;overflow-wrap:break-word}
-@media(max-width:780px){.awm-nav-bar{gap:8px;padding:10px 12px}.awm-nav-bar #awmWelcome{margin-right:20px}}
-@media(max-width:520px){.awm-nav-bar #awmWelcome{flex:1 1 100%;width:100%;max-width:100%;margin:2px 20px 0 0;text-align:right}}
+/* Nazwisko/imie zalogowanego rzeczoznawcy w dolnym prawym rogu zielonego naglowka. */
+.top #awmWelcome{display:none;position:absolute;right:16px;bottom:13px;z-index:16;color:#fff;font-family:Georgia,'Times New Roman',serif;font-size:clamp(16px,2vw,19px);font-weight:700;font-style:italic;line-height:1.2;text-align:right;white-space:nowrap;text-shadow:0 2px 3px #002a20;max-width:calc(100% - 32px)}
+@media(max-width:780px){.awm-nav-bar{gap:8px;padding:10px 12px}.top #awmWelcome{right:16px;bottom:12px;font-size:17px}}
 </style></head><body>
-<header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><div class="who" id="who" style="position:absolute;top:18px;right:128px;z-index:15;white-space:nowrap"><span id="awmDesktopStatus" style="font-size:13px;color:#ffce8d;font-weight:700;font-style:italic">● AWM OFFLINE</span></div><button id="awmTopLogout" type="button" onclick="logout()" style="display:none;position:absolute;top:10px;right:14px;z-index:15;padding:8px 14px;background:#b6222b;color:#fff;border:1px solid #ff9d9d;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">⏻ WYLOGUJ</button></header>
+<header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><div class="who" id="who" style="position:absolute;top:18px;right:128px;z-index:15;white-space:nowrap"><span id="awmDesktopStatus" style="font-size:13px;color:#ffce8d;font-weight:700;font-style:italic">● AWM OFFLINE</span></div><button id="awmTopLogout" type="button" onclick="logout()" style="display:none;position:absolute;top:10px;right:14px;z-index:15;padding:8px 14px;background:#b6222b;color:#fff;border:1px solid #ff9d9d;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">⏻ WYLOGUJ</button><span id="awmWelcome" aria-live="polite">Witaj!</span></header>
 <div class="awm-nav-bar">
   <a href="/warsztat" class="workshop-top-link" style="padding:9px 13px;border-radius:7px;color:#fff;background:#076e4d;text-decoration:none;font-size:12px;font-weight:800;white-space:nowrap">🔧 WARSZTAT</a>
   <a href="/warsztat#rejestrator" aria-label="Otwórz rejestrator głosowy Warsztatu" style="padding:9px 13px;border-radius:7px;color:#fff;background:#07563f;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap">🎙 REJESTRATOR</a>
-  <span id="awmWelcome" aria-live="polite">Witaj!</span>
+
   
 </div>
 <div class="watermark"><div class="car"></div><div class="awm">AWM</div><div class="wm-sub">DIAGNOSTYKA POJAZDÓW</div></div>
