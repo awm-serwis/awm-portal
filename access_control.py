@@ -127,9 +127,33 @@ def install_access_control(app):
         if API_KEY=="AWM-CHANGE-ME" or not key or not hmac.compare_digest(key,API_KEY):
             return jsonify(error="Historia dostepna tylko w programie AWM"),403
         c=audit_db()
-        try: rows=[dict(r) for r in c.execute("SELECT created,login,event,resource,ip,success FROM events ORDER BY id DESC LIMIT 300")]
+        try: rows=[dict(r) for r in c.execute("SELECT id,created,login,event,resource,ip,success FROM events ORDER BY id DESC LIMIT 300")]
         finally:c.close()
         return jsonify(events=rows)
+    @app.delete("/api/admin/access-events")
+    def delete_access_events():
+        key=request.headers.get("X-AWM-Key","")
+        if API_KEY=="AWM-CHANGE-ME" or not key or not hmac.compare_digest(key,API_KEY):
+            return jsonify(error="Usuwanie historii dostępne tylko w programie AWM"),403
+        payload=request.get_json(silent=True) or {}
+        ids=payload.get("ids")
+        if not isinstance(ids,list) or not ids or len(ids)>300:
+            return jsonify(error="Wybierz od 1 do 300 wpisów"),400
+        if any(type(i) is not int or i<=0 for i in ids):
+            return jsonify(error="Nieprawidłowe ID wpisu"),400
+        ids=list(set(ids))
+        c=audit_db()
+        try:
+            marks=",".join("?" for _ in ids)
+            cur=c.execute("DELETE FROM events WHERE id IN ("+marks+")",ids)
+            deleted=cur.rowcount
+            c.execute("INSERT INTO events(created,login,event,resource,ip,success) VALUES(?,?,?,?,?,?)",
+                      (datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                       "AWM","audit_delete",str(deleted)+" deleted",request.remote_addr or "",1))
+            c.commit()
+        finally:c.close()
+        return jsonify(ok=True,deleted=deleted)
+
     @app.before_request
     def check_disabled_reviewer():
         u=session.get("user")
