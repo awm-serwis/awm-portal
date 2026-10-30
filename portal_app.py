@@ -51,6 +51,15 @@ init_db()
 
 def api_ok(): return hmac.compare_digest(request.headers.get('X-AWM-Key',''), API_KEY)
 def safe(n): return ''.join(ch for ch in Path(n).name if ch.isalnum() or ch in ' ._-()[]')[:160] or 'plik'
+def _awm_meta_registration(meta):
+    """Wsteczna zgodnosc z roznymi wersjami desktop AWM."""
+    for key in ('rejestracja','rej','nr_rejestracyjny','nr_rej','registration','registration_number','plate'):
+        value=str(meta.get(key) or '').strip()
+        if value: return value
+    data=meta.get('data')
+    if isinstance(data,dict): return _awm_meta_registration(data)
+    return ''
+
 def vdict(r):
     return {'id':r['portal_id'] or str(r['id']),'marka':r['marka'],'model':r['model'],'rejestracja':r['rej'],'rej':r['rej'],'vin':r['vin'],'przebieg':r['przebieg'],'rok':r['rok'],'aktualizacja':r['updated'],'updated':r['updated'],'active':bool(r['active']),'show_opis':bool(r['show_opis']),'show_wycena':bool(r['show_wycena']),'show_raport':bool(r['show_raport']),'show_soh':bool(r['show_soh']),'show_wycena_ai':bool(r['show_wycena_ai'])}
 
@@ -535,12 +544,12 @@ def publish_auto():
                 try: Path(old['path']).unlink(missing_ok=True)
                 except Exception: pass
             c.execute("delete from docs where vehicle_id=? and kind in ('photo','thumb')",(vid,))
-            c.execute('update vehicles set marka=?,model=?,rej=?,vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',
-                      (meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),
+            c.execute('update vehicles set marka=?,model=?,rej=COALESCE(NULLIF(?,''),rej),vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',
+                      (meta.get('marka',''),meta.get('model',''),_awm_meta_registration(meta),meta.get('vin',''),
                        meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'),vid))
         else:
             cur=c.execute('insert into vehicles(portal_id,marka,model,rej,vin,przebieg,rok,updated,active) values(?,?,?,?,?,?,?,?,1)',
-                          (pid,meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),
+                          (pid,meta.get('marka',''),meta.get('model',''),_awm_meta_registration(meta),meta.get('vin',''),
                            meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes')))
             vid=cur.lastrowid
         d=FILES/str(vid); d.mkdir(parents=True,exist_ok=True)
@@ -612,9 +621,9 @@ def publish():
             vid=r['id']
             for old in c.execute('select path from docs where vehicle_id=?',(vid,)).fetchall(): Path(old['path']).unlink(missing_ok=True)
             c.execute('delete from docs where vehicle_id=?',(vid,))
-            c.execute('update vehicles set marka=?,model=?,rej=?,vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',(meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'),vid))
+            c.execute('update vehicles set marka=?,model=?,rej=COALESCE(NULLIF(?,''),rej),vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',(meta.get('marka',''),meta.get('model',''),_awm_meta_registration(meta),meta.get('vin',''),meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'),vid))
         else:
-            cur=c.execute('insert into vehicles(portal_id,marka,model,rej,vin,przebieg,rok,updated,active) values(?,?,?,?,?,?,?,?,1)',(pid,meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'))); vid=cur.lastrowid
+            cur=c.execute('insert into vehicles(portal_id,marka,model,rej,vin,przebieg,rok,updated,active) values(?,?,?,?,?,?,?,?,1)',(pid,meta.get('marka',''),meta.get('model',''),_awm_meta_registration(meta),meta.get('vin',''),meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'))); vid=cur.lastrowid
         d=FILES/str(vid); shutil.rmtree(d,ignore_errors=True); d.mkdir(parents=True,exist_ok=True)
         for folder,kind in {'ZDJECIA':'photo','MINIATURY':'thumb','OPIS':'opis','WYCENA':'wycena','DIAG':'raport'}.items():
             src=td/'x'/folder
