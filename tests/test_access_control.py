@@ -42,6 +42,28 @@ class AccessTests(unittest.TestCase):
         self.assertTrue(any(e["event"]=="account_disable" for e in events))
         self.assertTrue(any(e["event"]=="login" for e in events))
 
+    def test_selective_audit_removal_requires_desktop_key(self):
+        self.client.post("/api/login",json={"login":"AWM","password":os.getenv("AWM_ADMIN_PASS","AWM-START-2026")})
+        events=self.client.get("/api/admin/access-events",headers=self.key).get_json()["events"]
+        self.assertTrue(events)
+        target=events[0]["id"]
+        self.assertEqual(self.client.delete("/api/admin/access-events",json={"ids":[target]}).status_code,403)
+        self.assertEqual(self.client.delete("/api/admin/access-events",json={"ids":[]},headers=self.key).status_code,400)
+        response=self.client.delete("/api/admin/access-events",json={"ids":[target]},headers=self.key)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.get_json()["deleted"],1)
+        newer=self.client.get("/api/admin/access-events",headers=self.key).get_json()["events"]
+        self.assertFalse(any(e["id"]==target for e in newer))
+        self.assertTrue(any(e["event"]=="audit_delete" for e in newer))
+
+    def test_desktop_online_offline_switch(self):
+        self.assertEqual(self.client.post("/api/awm-desktop/heartbeat",json={"online":True}).status_code,403)
+        self.assertEqual(self.client.post("/api/login",json={"login":"AWM","password":os.getenv("AWM_ADMIN_PASS","AWM-START-2026")}).status_code,200)
+        self.assertEqual(self.client.post("/api/awm-desktop/heartbeat",json={"online":True},headers=self.key).status_code,200)
+        self.assertTrue(self.client.get("/api/awm-desktop/status").get_json()["online"])
+        self.assertEqual(self.client.post("/api/awm-desktop/heartbeat",json={"online":False},headers=self.key).status_code,200)
+        self.assertFalse(self.client.get("/api/awm-desktop/status").get_json()["online"])
+
     def test_invalid_and_unauthorized(self):
         self.assertEqual(self.client.get("/api/admin/access-users").status_code,403)
         self.assertEqual(self.client.post("/api/admin/access-users",json={"login":"wrong","password":"123456"},headers={"X-AWM-Key":"bad"}).status_code,403)
