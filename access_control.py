@@ -99,7 +99,7 @@ def install_access_control(app):
         found=[x for x in list_accounts() if int(x["id"])==uid]
         if not found:return jsonify(error="Nie znaleziono konta"),404
         target=found[0]
-        if target.get("role")=="admin" or uid==int(session["user"]["id"]):
+        if target.get("role")=="admin" or (isinstance(session.get("user"),dict) and session["user"].get("id") is not None and uid==int(session["user"]["id"])):
             return jsonify(error="Konto administratora jest chronione"),403
         operation=data.get("action")
         try:
