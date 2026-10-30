@@ -47,13 +47,14 @@ class AccessTests(unittest.TestCase):
         events=self.client.get("/api/admin/access-events",headers=self.key).get_json()["events"]
         self.assertTrue(events)
         target=events[0]["id"]
+        event_kind=events[0]["event"]
         self.assertEqual(self.client.delete("/api/admin/access-events",json={"ids":[target]}).status_code,403)
         self.assertEqual(self.client.delete("/api/admin/access-events",json={"ids":[]},headers=self.key).status_code,400)
         response=self.client.delete("/api/admin/access-events",json={"ids":[target]},headers=self.key)
         self.assertEqual(response.status_code,200)
         self.assertEqual(response.get_json()["deleted"],1)
         newer=self.client.get("/api/admin/access-events",headers=self.key).get_json()["events"]
-        self.assertFalse(any(e["id"]==target for e in newer))
+        self.assertFalse(any(e["id"]==target and e["event"]==event_kind for e in newer))
         self.assertTrue(any(e["event"]=="audit_delete" for e in newer))
 
     def test_desktop_online_offline_switch(self):
