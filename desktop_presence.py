@@ -16,13 +16,15 @@ def install_desktop_presence(app):
         supplied=request.headers.get("X-AWM-Key","")
         if API_KEY=="AWM-CHANGE-ME" or not supplied or not hmac.compare_digest(supplied,API_KEY):
             return jsonify(error="Brak dostepu"),403
-        now=int(datetime.now(timezone.utc).timestamp())
+        payload=request.get_json(silent=True) or {}
+        online=payload.get("online",True) is not False
+        now=int(datetime.now(timezone.utc).timestamp()) if online else 0
         c=connect()
         try:
             c.execute("INSERT INTO heartbeat(id,timestamp) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET timestamp=excluded.timestamp",(now,))
             c.commit()
         finally:c.close()
-        return jsonify(ok=True)
+        return jsonify(ok=True,online=online)
     @app.get("/api/awm-desktop/status")
     def desktop_status():
         if not session.get("user"):return jsonify(error="Wymagane logowanie"),401
