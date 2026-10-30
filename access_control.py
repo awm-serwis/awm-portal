@@ -159,6 +159,7 @@ def install_access_control(app):
                 audit("login",login=payload.get("login",""),success=response.status_code<400)
             elif path=="/api/logout" and request.method=="POST": audit("logout")
             elif response.status_code<400 and request.method=="GET" and (
+              path.startswith("/file/") or path.startswith("/preview/") or
               path.startswith("/api/file/") or path.startswith("/api/preview/") or
               path.startswith("/api/files/") or path.startswith("/api/docs/") or path.startswith("/api/doc/")):
                 audit("document_open",resource=path)
