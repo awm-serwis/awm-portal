@@ -64,7 +64,7 @@ def install_workshop_access(app):
     def workshop_page():
         if (session.get("user") or {}).get("role") not in ("admin","workshop"):
             return Response(LOGIN_HTML,mimetype="text/html",headers={"Cache-Control":"no-store"})
-        page=g["WORKSHOP_PAGE"].replace("</body>",'<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script><script src="/static/workshop_access.js?v=1"></script></body>')
+        page=g["WORKSHOP_PAGE"].replace('href="/">← PRZEJDŹ DO PRZEGLĄDÓW', 'href="https://awm-portal-1.onrender.com/">← PRZEJDŹ DO PRZEGLĄDÓW').replace("</body>",'<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script><script src="/static/workshop_access.js?v=1"></script></body>')
         return Response(page,mimetype="text/html",headers={"Cache-Control":"no-store"})
     app.view_functions["home"]=workshop_home
     app.view_functions["login"]=workshop_login
