@@ -154,6 +154,10 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 /* AWM: belka nawigacyjna i powitanie – stabilny uklad desktop/mobile. */
 .awm-nav-bar{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:10px;padding:10px 12px;background:#f1f7f4;border-bottom:1px solid #cbded3;min-height:58px}
 .awm-nav-bar a{flex-shrink:0}
+/* Przycisk mikrofonu w rozmiarze ikonki Ustawienia. */
+.awm-nav-bar .awm-recorder-icon{display:inline-flex;width:38px;height:38px;flex:0 0 38px;align-items:center;justify-content:center;background:#fff;border:1px solid #bfd0c9;border-radius:9px;color:#19352c;text-decoration:none;font-size:21px;line-height:1;cursor:pointer}
+.awm-nav-bar .awm-recorder-icon:hover{background:#e6f1ed;border-color:#84a797}
+.awm-nav-bar .awm-recorder-icon:focus-visible{outline:3px solid #38b887;outline-offset:2px}
 /* Status pulpitu AWM na białym pasku — po prawej, bez ramki. */
 .awm-nav-bar .who{position:relative;z-index:2;margin-left:auto;margin-right:26px;display:flex;justify-content:flex-end;min-width:0;align-items:center}
 @media(max-width:780px){.awm-nav-bar .who{margin-right:20px}}
@@ -166,7 +170,7 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 <header class="top"><div class="brandbox"><div class="brand">PRZEGLĄD <b>AWM</b></div><div class="sub">PORTAL RZECZOZNAWCÓW</div></div><div class="slogan">Diagnostyka<br>Wycena<br>Pewność</div><button id="awmTopLogout" type="button" onclick="logout()" style="display:none;position:absolute;top:10px;right:14px;z-index:15;padding:8px 14px;background:#b6222b;color:#fff;border:1px solid #ff9d9d;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">⏻ WYLOGUJ</button><span id="awmWelcome" aria-live="polite">Witaj!</span></header>
 <div class="awm-nav-bar">
   <a href="/warsztat" class="workshop-top-link" style="padding:9px 13px;border-radius:7px;color:#fff;background:#076e4d;text-decoration:none;font-size:12px;font-weight:800;white-space:nowrap">🔧 WARSZTAT</a>
-  <a href="/warsztat#rejestrator" aria-label="Otwórz rejestrator głosowy Warsztatu" style="padding:9px 13px;border-radius:7px;color:#fff;background:#07563f;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap">🎙 REJESTRATOR</a>
+  <a href="/warsztat#rejestrator" class="awm-recorder-icon" aria-label="Otwórz rejestrator głosowy Warsztatu" title="Rejestrator głosowy">🎙️</a>
   <div class="who" id="who"><span id="awmDesktopStatus" style="font-size:15px;color:#a13e3e;font-weight:700;font-style:italic;white-space:nowrap">● AWM OFFLINE</span></div>
 
   
