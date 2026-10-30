@@ -1,11 +1,11 @@
 """AWM: zarzadzanie kontami rzeczoznawcow i rejestr dostepu (dysk Render)."""
-import os, sqlite3, re
+import os, sqlite3, re, hmac
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from flask import request, session, jsonify, Response
 
 def install_access_control(app):
-    from portal_app import DATA, db, ph
+    from portal_app import DATA, db, ph, API_KEY
     def audit_db():
         c=sqlite3.connect(Path(DATA)/"access_log.db",timeout=10)
         c.row_factory=sqlite3.Row
@@ -54,7 +54,10 @@ def install_access_control(app):
             finally: c.close()
     def guard(write=False):
         u=session.get("user")
-        if not isinstance(u,dict) or u.get("role")!="admin": return (jsonify(error="Dostep tylko dla administratora"),403)
+        key=request.headers.get("X-AWM-Key","")
+        desktop_key_valid=(API_KEY!="AWM-CHANGE-ME" and bool(key) and hmac.compare_digest(key,API_KEY))
+        if not desktop_key_valid and (not isinstance(u,dict) or u.get("role")!="admin"):
+            return (jsonify(error="Dostep tylko dla administratora"),403)
         if write:
             origin=request.headers.get("Origin")
             if origin and origin.rstrip("/")!=request.host_url.rstrip("/"): return (jsonify(error="Niedozwolone pochodzenie"),403)
