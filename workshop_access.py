@@ -103,6 +103,15 @@ def install_workshop_access(app):
     @app.before_request
     def validate_workshop_session():
         user=session.get("user")
+        # Staff may use only the Warsztat interface, not inspection/admin APIs.
+        if isinstance(user,dict) and user.get("role")=="workshop":
+            path=request.path
+            allowed=(path=="/" or path=="/warsztat" or path.startswith("/static/")
+                     or path in ("/health","/api/me","/api/logout","/api/login")
+                     or path.startswith("/api/warsztat/"))
+            if not allowed:
+                if path.startswith("/api/"):return jsonify(error="Brak uprawnień do tego modułu"),403
+                return redirect("/warsztat",302)
         if not isinstance(user,dict) or user.get("role") not in ("admin","workshop"):return None
         if request.path.startswith("/static/") or request.path=="/health":return None
         try:
