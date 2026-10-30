@@ -55,14 +55,17 @@ def install_workshop_access(app):
         if request.host.split(":")[0].lower()=="awm-warsztat.onrender.com" or os.getenv("AWM_WORKSHOP_HOME")=="1":
             return redirect("/warsztat",302)
         return original_home()
+    def logged_role():
+        current=session.get("user")
+        return current.get("role") if isinstance(current,dict) else None
     def workshop_login():
         result=original_login()
-        if (session.get("user") or {}).get("role") not in ("admin","workshop"):
+        if logged_role() not in ("admin","workshop"):
             session.clear()
             return jsonify(error="Brak uprawnień do Warsztatu"),401
         return result
     def workshop_page():
-        if (session.get("user") or {}).get("role") not in ("admin","workshop"):
+        if logged_role() not in ("admin","workshop"):
             return Response(LOGIN_HTML,mimetype="text/html",headers={"Cache-Control":"no-store"})
         page=g["WORKSHOP_PAGE"].replace('href="/">← PRZEJDŹ DO PRZEGLĄDÓW', 'href="https://awm-portal-1.onrender.com/">← PRZEJDŹ DO PRZEGLĄDÓW').replace("</body>",'<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script><script src="/static/workshop_access.js?v=1"></script></body>')
         return Response(page,mimetype="text/html",headers={"Cache-Control":"no-store"})
@@ -127,7 +130,7 @@ def install_workshop_access(app):
 
     @app.route("/api/warsztat/access-users",methods=["GET","POST","PATCH"])
     def workshop_staff_access():
-        if (session.get("user") or {}).get("role")!="admin":
+        if logged_role()!="admin":
             return jsonify(error="Wymagane uprawnienia administratora"),403
         if request.method!="GET":
             origin=request.headers.get("Origin")
