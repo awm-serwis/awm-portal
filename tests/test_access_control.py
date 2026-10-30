@@ -55,7 +55,7 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(self.client.get("/warsztat").status_code,403)
         self.assertEqual(self.client.post("/api/login",json={"login":"AWM","password":os.getenv("AWM_ADMIN_PASS","AWM-START-2026")}).status_code,200)
         self.assertEqual(self.client.get("/warsztat").status_code,200)
-        self.assertEqual(self.client.get("/admin/dostep").status_code,200)
+        self.assertEqual(self.client.get("/admin/dostep").status_code,404)
 
 if __name__=="__main__":
     unittest.main()
