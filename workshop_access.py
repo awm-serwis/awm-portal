@@ -130,9 +130,12 @@ def install_workshop_access(app):
 
     @app.route("/api/warsztat/access-users",methods=["GET","POST","PATCH"])
     def workshop_staff_access():
-        if logged_role()!="admin":
-            return jsonify(error="Wymagane uprawnienia administratora"),403
-        if request.method!="GET":
+        # Desktop AWM uses the same protected API key as workshop publication.
+        supplied=request.headers.get("X-AWM-Key","")
+        desktop_ok=bool(supplied) and api_key!="AWM-CHANGE-ME" and hmac.compare_digest(supplied,api_key)
+        if logged_role()!="admin" and not desktop_ok:
+            return jsonify(error="Wymagane uprawnienia administratora lub ważny klucz AWM"),403
+        if request.method!="GET" and not desktop_ok:
             origin=request.headers.get("Origin")
             site=request.headers.get("Sec-Fetch-Site","same-origin")
             if (origin and origin.rstrip("/")!=request.host_url.rstrip("/")) or site not in ("same-origin","none"):
