@@ -42,7 +42,9 @@ def init_db():
     if 'important' not in acols:
         c.execute('alter table announcements add column important INTEGER DEFAULT 0')
 
-    if not c.execute('select 1 from users where login=?',(ADMIN_USER,)).fetchone():
+    # Konto startowe tylko przy pierwszym uruchomieniu. Nie odtwarzaj
+    # usunietego administratora AWM, jesli inny administrator juz istnieje.
+    if not c.execute("select 1 from users where role in ('admin','admin_disabled')").fetchone():
         c.execute('insert into users(login,pass,role) values(?,?,?)',(ADMIN_USER,ph(ADMIN_PASS),'admin'))
     c.commit(); c.close()
 init_db()
@@ -278,7 +280,7 @@ def me():
 @app.post('/api/login')
 def login():
     x=request.get_json(silent=True) or {}; c=db(); r=c.execute('select * from users where login=?',(x.get('login',''),)).fetchone(); c.close()
-    if not r or r['role']=='disabled' or not okp(x.get('password',''),r['pass']): return jsonify(error='Błędny login lub hasło'),401
+    if not r or r['role'] in ('disabled','admin_disabled') or not okp(x.get('password',''),r['pass']): return jsonify(error='Błędny login lub hasło'),401
     session['user']={'id':r['id'],'login':r['login'],'role':r['role']}; return jsonify(ok=True)
 @app.post('/api/logout')
 def logout(): session.clear(); return jsonify(ok=True)
