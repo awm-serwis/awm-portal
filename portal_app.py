@@ -1218,6 +1218,10 @@ def awm_workshop_requests_redirect():
     return Response(status=302, headers={'Location': '/warsztat'})
 
 
+# Standalone Warsztat login and staff administration.
+from workshop_access import install_workshop_access
+install_workshop_access(app)
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '10000'))
     app.run(host='0.0.0.0', port=port, debug=False)
