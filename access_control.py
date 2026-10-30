@@ -51,7 +51,7 @@ def install_access_control(app):
         else:
             c=db()
             try:
-                c.execute("DELETE FROM users WHERE id=? AND login=? AND role!='admin'",(uid,login))
+                c.execute("DELETE FROM users WHERE id=? AND login=?",(uid,login))
                 c.commit()
             finally: c.close()
         c=audit_db()
@@ -59,18 +59,21 @@ def install_access_control(app):
             c.execute("DELETE FROM reviewer_labels WHERE login=?",(login,))
             c.commit()
         finally: c.close()
-    def insert_account(login, password):
+    def insert_account(login, password, role="reviewer"):
+        if role not in ("reviewer","admin"): raise ValueError("Unsupported role")
         if supa():
             from supabase_backend import sb
-            sb.table("users").insert({"login":login,"pass":ph(password),"role":"reviewer"}).execute()
+            sb.table("users").insert({"login":login,"pass":ph(password),"role":role}).execute()
         else:
             c=db()
-            try: c.execute("INSERT INTO users(login,pass,role) VALUES(?,?,?)",(login,ph(password),"reviewer"));c.commit()
+            try: c.execute("INSERT INTO users(login,pass,role) VALUES(?,?,?)",(login,ph(password),role));c.commit()
             finally: c.close()
+    def desktop_key_ok():
+        key=request.headers.get("X-AWM-Key","")
+        return API_KEY!="AWM-CHANGE-ME" and bool(key) and hmac.compare_digest(key,API_KEY)
     def guard(write=False):
         u=session.get("user")
-        key=request.headers.get("X-AWM-Key","")
-        desktop_key_valid=(API_KEY!="AWM-CHANGE-ME" and bool(key) and hmac.compare_digest(key,API_KEY))
+        desktop_key_valid=desktop_key_ok()
         if not desktop_key_valid and (not isinstance(u,dict) or u.get("role")!="admin"):
             return (jsonify(error="Dostep tylko dla administratora"),403)
         if write:
@@ -93,12 +96,19 @@ def install_access_control(app):
             name=str(data.get("login") or "").strip()
             password=str(data.get("password") or "")
             label=str(data.get("label") or "").strip()[:100]
+            role=str(data.get("role") or "reviewer").strip()
+            if role not in ("reviewer","admin"): return jsonify(error="Nieprawidlowa rola"),400
+            if role=="admin":
+                if not desktop_key_ok(): return jsonify(error="Administratora dodaje tylko program AWM"),403
+                if str(data.get("confirm_admin") or "")!="UTWORZ ADMINISTRATORA":
+                    return jsonify(error="Wymagane potwierdzenie utworzenia administratora"),400
+                if len(password)<12: return jsonify(error="Haslo administratora: minimum 12 znakow"),400
             if not re.fullmatch(r"[A-Za-z0-9_.-]{3,60}",name): return jsonify(error="Login: 3–60 znakow, litery/cyfry/._-"),400
             if not 6<=len(password)<=128: return jsonify(error="Haslo musi miec co najmniej 6 znakow"),400
             if name.lower() in {str(u["login"]).lower() for u in list_accounts()}:
                 return jsonify(error="Login jest juz zajety"),409
             try:
-                insert_account(name,password)
+                insert_account(name,password,role=role)
                 c=audit_db()
                 try:
                     c.execute("INSERT OR REPLACE INTO reviewer_labels(login,label) VALUES(?,?)",(name,label))
@@ -107,16 +117,21 @@ def install_access_control(app):
             except Exception:
                 app.logger.exception("AWM create reviewer error")
                 return jsonify(error="Nie udalo sie utworzyc konta"),503
-            audit("account_created",resource=name)
+            audit("account_created",resource=name+" ("+role+")")
             return jsonify(ok=True),201
         try: uid=int(data.get("id"))
         except (ValueError,TypeError): return jsonify(error="Niepoprawne ID"),400
         found=[x for x in list_accounts() if int(x["id"])==uid]
         if not found:return jsonify(error="Nie znaleziono konta"),404
         target=found[0]
-        if target.get("role")=="admin":
-            return jsonify(error="Konto administratora jest chronione"),403
         operation=data.get("action")
+        if target.get("role")=="admin":
+            if operation!="delete": return jsonify(error="Konto administratora: dozwolone tylko usuniecie"),403
+            if not desktop_key_ok(): return jsonify(error="Usuwanie administratora tylko w programie AWM"),403
+            if str(data.get("confirm_admin") or "")!="USUN ADMINISTRATORA":
+                return jsonify(error="Potwierdz trwale usuniecie administratora"),400
+            if sum(1 for a in list_accounts() if a.get("role")=="admin")<2:
+                return jsonify(error="To ostatni administrator. Najpierw dodaj drugiego w programie AWM."),409
         try:
             if operation=="delete":
                 if str(data.get("confirm_login") or "")!=str(target["login"]):
@@ -176,12 +191,12 @@ def install_access_control(app):
     @app.before_request
     def check_disabled_reviewer():
         u=session.get("user")
-        if not isinstance(u,dict) or u.get("role") not in ("reviewer","disabled"): return None
+        if not isinstance(u,dict) or u.get("role") not in ("reviewer","disabled","admin"): return None
         if request.path.startswith("/static/") or request.path=="/health": return None
         try:
             uid=u.get("id")
             current=next((r for r in list_accounts() if str(r["id"])==str(uid)),None)
-            if not current or current.get("role")!="reviewer":
+            if not current or current.get("role")!=u.get("role") or str(current.get("login"))!=str(u.get("login")) or current.get("role")=="disabled":
                 audit("session_revoked")
                 session.clear()
                 if request.path.startswith("/api/"): return jsonify(error="Dostep zostal wycofany"),401
