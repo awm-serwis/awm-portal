@@ -65,6 +65,20 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/awm-desktop/heartbeat",json={"online":False},headers=self.key).status_code,200)
         self.assertFalse(self.client.get("/api/awm-desktop/status").get_json()["online"])
 
+    def test_personalized_welcome_name(self):
+        self.client.post("/api/admin/access-users",json={"login":"dominik","password":"abcdef","label":"Dominik Kowalski"},headers=self.key)
+        self.client.post("/api/login",json={"login":"dominik","password":"abcdef"})
+        response=self.client.get("/api/me")
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.get_json()["user"]["display_name"],"Dominik Kowalski")
+        self.assertEqual(self.client.patch("/api/admin/access-users",
+            json={"id":next(u["id"] for u in self.client.get("/api/admin/access-users",headers=self.key).get_json()["users"] if u["login"]=="dominik"),
+                  "action":"label","label":"Domi"},headers=self.key).status_code,200)
+        self.assertEqual(self.client.get("/api/me").get_json()["user"]["display_name"],"Domi")
+        homepage=self.client.get("/").get_data(as_text=True)
+        self.assertIn("Witaj, ",homepage)
+        self.assertIn("awmWelcome",homepage)
+
     def test_invalid_and_unauthorized(self):
         self.assertEqual(self.client.get("/api/admin/access-users").status_code,403)
         self.assertEqual(self.client.post("/api/admin/access-users",json={"login":"wrong","password":"123456"},headers={"X-AWM-Key":"bad"}).status_code,403)
