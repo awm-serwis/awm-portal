@@ -42,13 +42,24 @@ def init_db():
     if 'important' not in acols:
         c.execute('alter table announcements add column important INTEGER DEFAULT 0')
 
-    if not c.execute('select 1 from users where login=?',(ADMIN_USER,)).fetchone():
+    # Konto startowe tylko przy pierwszym uruchomieniu. Nie odtwarzaj
+    # usunietego administratora AWM, jesli inny administrator juz istnieje.
+    if not c.execute("select 1 from users where role in ('admin','admin_disabled')").fetchone():
         c.execute('insert into users(login,pass,role) values(?,?,?)',(ADMIN_USER,ph(ADMIN_PASS),'admin'))
     c.commit(); c.close()
 init_db()
 
 def api_ok(): return hmac.compare_digest(request.headers.get('X-AWM-Key',''), API_KEY)
 def safe(n): return ''.join(ch for ch in Path(n).name if ch.isalnum() or ch in ' ._-()[]')[:160] or 'plik'
+def _awm_meta_registration(meta):
+    """Wsteczna zgodnosc z roznymi wersjami desktop AWM."""
+    for key in ('rejestracja','rej','nr_rejestracyjny','nr_rej','registration','registration_number','plate'):
+        value=str(meta.get(key) or '').strip()
+        if value: return value
+    data=meta.get('data')
+    if isinstance(data,dict): return _awm_meta_registration(data)
+    return ''
+
 def vdict(r):
     return {'id':r['portal_id'] or str(r['id']),'marka':r['marka'],'model':r['model'],'rejestracja':r['rej'],'rej':r['rej'],'vin':r['vin'],'przebieg':r['przebieg'],'rok':r['rok'],'aktualizacja':r['updated'],'updated':r['updated'],'active':bool(r['active']),'show_opis':bool(r['show_opis']),'show_wycena':bool(r['show_wycena']),'show_raport':bool(r['show_raport']),'show_soh':bool(r['show_soh']),'show_wycena_ai':bool(r['show_wycena_ai'])}
 
@@ -147,6 +158,13 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
  border:1px solid rgba(35,58,52,.32)!important;
 }
 #list .row .actions .a.green{font-size:9px!important;line-height:1.05!important;white-space:normal!important}
+
+/* AWM R137 - numer rejestracyjny oraz data ostatniej publikacji. */
+#list .awm-reg-tag{display:inline-block;font-weight:800;font-size:12px;color:#173b30;white-space:normal;overflow-wrap:anywhere}
+#list .awm-published-tag{display:inline-flex;align-items:center;color:#395b4e;font-size:11px;font-weight:700;padding:5px 7px;background:#f0f6f3;border-radius:7px}
+#list .vtitle{flex-wrap:wrap;gap:8px}
+#list .tags{flex-wrap:wrap;gap:6px;margin-top:8px}
+
 /* AWM vehicle data order: year, mileage, registration, VIN */
 #list .row .details{grid-template-columns:90px 120px minmax(110px,1fr) minmax(160px,1.25fr)!important;gap:10px!important}
 @media(max-width:900px){#list .row .details{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
@@ -223,7 +241,7 @@ function aiReq(v){let k=aiReqKey(v),st=localStorage.getItem(k)||'idle',started=N
  if(/elektr|electric|\bev\b|tesla/.test(s)) return '🔌 POJAZD ELEKTRYCZNY';
  return '⛽ POJAZD SPALINOWY';
 }
-function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>{if(k==='wycena_ai'){if(v.show_wycena_ai===false||v.show_wycena_ai===0)return '';let d=v.docs.find(d=>d.kind==='wycena_ai'),vin=String(v.vin||'').toUpperCase(),base={'W1V9076351P430601':108000,'WAUZZZGY2NA027731':110000,'JTNB23HK003139274':80000,'JTNB23HK703108975':61000}[vin],repair={'WAUZZZGY2NA027731':14812}[vin]||0,mv=base?Math.max(0,base-repair):0;return `<button class="a gold aivalbtn" onclick="openAI('${e(v.id)}')"><span>WYCENA AI</span>${mv?`<small>${Number(mv).toLocaleString('pl-PL')} zł</small>`:''}</button>`;}if((k==='opis'&&(v.show_opis===false||v.show_opis===0))||(k==='wycena'&&(v.show_wycena===false||v.show_wycena===0))||(k==='raport'&&(v.show_raport===false||v.show_raport===0))||(k==='soh'&&(v.show_soh===false||v.show_soh===0)))return '';let d=v.docs.find(d=>d.kind===k);if((k==='soh'||k==='opis_2life')&&!d)return '';let pv=(k==='opis'?v.docs.find(x=>x.kind==='opis_pdf'):null);if(!d)return `<div class="a docempty">${k==='opis'?'OPIS':k==='raport'?'RAPORT DIAG':k==='soh'?'RAPORT SOH':k==='opis_2life'?'OPIS 2LIFE':'WYCENA'}<br><small>BRAK DOKUMENTU</small></div>`;return `<button class="a ${k==='opis'?'blue':k==='wycena'?'green':k==='raport'?'dark':k==='soh'?'dark':k==='opis_2life'?'green':''}" onclick="${k==='opis_2life'?`window.location.href='/file/${d.id}?download=1'`:`openDoc(${pv?pv.id:d.id},'${e(d.name||k)}',${d.id})`}">${k==='opis'?'OPIS':k==='wycena'?'WYCENA':k==='soh'?'RAPORT SOH':k==='opis_2life'?'POBIERZ OPIS 2LIFE':'RAPORT DIAG'}</button>`};let pc=(v.photos||[]).length;return `<div class="row"><div class="picwrap">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}${pc?`<span class="photocount">▧ ${pc}</span>`:''}</div><div><div class="vtitle"><b>${e(v.marka)} ${e(v.model)}</b><span class="badge">↗ UDOSTĘPNIONY</span></div><div class="details"><div><div class="label">Rok</div><div class="val">${e(v.rok||'—')}</div></div><div><div class="label">Przebieg</div><div class="val">${e(v.przebieg||'—')} km</div></div><div><div class="label">Rejestracja</div><div class="val">${e(v.rej||'—')}</div></div><div><div class="label">VIN</div><div class="val">${e(v.vin||'—')}</div></div></div><div class="tags"><span class="tag">${driveTag(v)}</span><span class="tag">AWM</span></div></div><div class="actions">${b('opis')}${b('raport')}${b('opis_2life')}<button class="a green" type="button" onclick="confirmVehicleCollected('${e(v.id)}')">✓ POJAZD POBRANY</button></div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
+function render(){let s=($('q').value||'').toLowerCase();let a=V.filter(v=>JSON.stringify(v).toLowerCase().includes(s));$('list').innerHTML=a.map(v=>{let b=k=>{if(k==='wycena_ai'){if(v.show_wycena_ai===false||v.show_wycena_ai===0)return '';let d=v.docs.find(d=>d.kind==='wycena_ai'),vin=String(v.vin||'').toUpperCase(),base={'W1V9076351P430601':108000,'WAUZZZGY2NA027731':110000,'JTNB23HK003139274':80000,'JTNB23HK703108975':61000}[vin],repair={'WAUZZZGY2NA027731':14812}[vin]||0,mv=base?Math.max(0,base-repair):0;return `<button class="a gold aivalbtn" onclick="openAI('${e(v.id)}')"><span>WYCENA AI</span>${mv?`<small>${Number(mv).toLocaleString('pl-PL')} zł</small>`:''}</button>`;}if((k==='opis'&&(v.show_opis===false||v.show_opis===0))||(k==='wycena'&&(v.show_wycena===false||v.show_wycena===0))||(k==='raport'&&(v.show_raport===false||v.show_raport===0))||(k==='soh'&&(v.show_soh===false||v.show_soh===0)))return '';let d=v.docs.find(d=>d.kind===k);if((k==='soh'||k==='opis_2life')&&!d)return '';let pv=(k==='opis'?v.docs.find(x=>x.kind==='opis_pdf'):null);if(!d)return `<div class="a docempty">${k==='opis'?'OPIS':k==='raport'?'RAPORT DIAG':k==='soh'?'RAPORT SOH':k==='opis_2life'?'OPIS 2LIFE':'WYCENA'}<br><small>BRAK DOKUMENTU</small></div>`;return `<button class="a ${k==='opis'?'blue':k==='wycena'?'green':k==='raport'?'dark':k==='soh'?'dark':k==='opis_2life'?'green':''}" onclick="${k==='opis_2life'?`window.location.href='/file/${d.id}?download=1'`:`openDoc(${pv?pv.id:d.id},'${e(d.name||k)}',${d.id})`}">${k==='opis'?'OPIS':k==='wycena'?'WYCENA':k==='soh'?'RAPORT SOH':k==='opis_2life'?'POBIERZ OPIS 2LIFE':'RAPORT DIAG'}</button>`};let pc=(v.photos||[]).length;return `<div class="row"><div class="picwrap">${v.photo?`<img class="pic" src="/file/${v.photo}" onclick="openPic('${e(v.id)}')" title="Kliknij, aby powiększyć">`:'<div class="pic"></div>'}${pc?`<span class="photocount">▧ ${pc}</span>`:''}</div><div><div class="vtitle"><b>${e(v.marka)} ${e(v.model)}</b><span class="badge">↗ UDOSTĘPNIONY</span><span class="awm-reg-tag">NR REJ.: ${e(v.rejestracja||v.rej||'BRAK DANYCH')}</span></div><div class="details"><div><div class="label">Rok</div><div class="val">${e(v.rok||'—')}</div></div><div><div class="label">Przebieg</div><div class="val">${e(v.przebieg||'—')} km</div></div><div><div class="label">Rejestracja</div><div class="val">${e(v.rejestracja||v.rej||'—')}</div></div><div><div class="label">VIN</div><div class="val">${e(v.vin||'—')}</div></div></div><div class="tags"><span class="tag">${driveTag(v)}</span><span class="tag">AWM</span><span class="awm-published-tag">Data publikacji: ${e(String(v.published_at||v.aktualizacja||v.updated||'—').replace('T',' ').slice(0,16))}</span></div></div><div class="actions">${b('opis')}${b('raport')}${b('opis_2life')}<button class="a green" type="button" onclick="confirmVehicleCollected('${e(v.id)}')">✓ POJAZD POBRANY</button></div></div>`}).join('')||'<div class="card empty">Brak udostępnionych pojazdów.</div>'}
 async function openAI(id){
  let v=V.find(x=>String(x.id)===String(id));if(!v)return;
  let img=v.photo?'/file/'+v.photo:'',has=k=>v.docs.some(d=>d.kind===k),doc=v.docs.find(d=>d.kind==='wycena_ai'),q=null;
@@ -278,7 +296,7 @@ def me():
 @app.post('/api/login')
 def login():
     x=request.get_json(silent=True) or {}; c=db(); r=c.execute('select * from users where login=?',(x.get('login',''),)).fetchone(); c.close()
-    if not r or r['role']=='disabled' or not okp(x.get('password',''),r['pass']): return jsonify(error='Błędny login lub hasło'),401
+    if not r or r['role'] in ('disabled','admin_disabled') or not okp(x.get('password',''),r['pass']): return jsonify(error='Błędny login lub hasło'),401
     session['user']={'id':r['id'],'login':r['login'],'role':r['role']}; return jsonify(ok=True)
 @app.post('/api/logout')
 def logout(): session.clear(); return jsonify(ok=True)
@@ -526,12 +544,12 @@ def publish_auto():
                 try: Path(old['path']).unlink(missing_ok=True)
                 except Exception: pass
             c.execute("delete from docs where vehicle_id=? and kind in ('photo','thumb')",(vid,))
-            c.execute('update vehicles set marka=?,model=?,rej=?,vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',
-                      (meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),
+            c.execute('update vehicles set marka=?,model=?,rej=COALESCE(NULLIF(?,''),rej),vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',
+                      (meta.get('marka',''),meta.get('model',''),_awm_meta_registration(meta),meta.get('vin',''),
                        meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'),vid))
         else:
             cur=c.execute('insert into vehicles(portal_id,marka,model,rej,vin,przebieg,rok,updated,active) values(?,?,?,?,?,?,?,?,1)',
-                          (pid,meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),
+                          (pid,meta.get('marka',''),meta.get('model',''),_awm_meta_registration(meta),meta.get('vin',''),
                            meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes')))
             vid=cur.lastrowid
         d=FILES/str(vid); d.mkdir(parents=True,exist_ok=True)
@@ -603,9 +621,9 @@ def publish():
             vid=r['id']
             for old in c.execute('select path from docs where vehicle_id=?',(vid,)).fetchall(): Path(old['path']).unlink(missing_ok=True)
             c.execute('delete from docs where vehicle_id=?',(vid,))
-            c.execute('update vehicles set marka=?,model=?,rej=?,vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',(meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'),vid))
+            c.execute('update vehicles set marka=?,model=?,rej=COALESCE(NULLIF(?,''),rej),vin=?,przebieg=?,rok=?,updated=?,active=1 where id=?',(meta.get('marka',''),meta.get('model',''),_awm_meta_registration(meta),meta.get('vin',''),meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'),vid))
         else:
-            cur=c.execute('insert into vehicles(portal_id,marka,model,rej,vin,przebieg,rok,updated,active) values(?,?,?,?,?,?,?,?,1)',(pid,meta.get('marka',''),meta.get('model',''),meta.get('rejestracja',''),meta.get('vin',''),meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'))); vid=cur.lastrowid
+            cur=c.execute('insert into vehicles(portal_id,marka,model,rej,vin,przebieg,rok,updated,active) values(?,?,?,?,?,?,?,?,1)',(pid,meta.get('marka',''),meta.get('model',''),_awm_meta_registration(meta),meta.get('vin',''),meta.get('przebieg',''),meta.get('rok',''),datetime.now().isoformat(timespec='minutes'))); vid=cur.lastrowid
         d=FILES/str(vid); shutil.rmtree(d,ignore_errors=True); d.mkdir(parents=True,exist_ok=True)
         for folder,kind in {'ZDJECIA':'photo','MINIATURY':'thumb','OPIS':'opis','WYCENA':'wycena','DIAG':'raport'}.items():
             src=td/'x'/folder

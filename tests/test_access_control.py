@@ -79,6 +79,64 @@ class AccessTests(unittest.TestCase):
         self.assertIn("Witaj, ",homepage)
         self.assertIn("awmWelcome",homepage)
 
+    def test_admin_account_lifecycle_r137(self):
+        # Desktop can manage admins, but an admin cannot be created by a web-only session.
+        before=self.client.post("/api/admin/access-users",json={
+            "login":"r137testadmin","password":"AVeryStrongPassword2026!",
+            "label":"Nowy administrator","role":"admin",
+            "confirm_admin":"UTWORZ ADMINISTRATORA"
+        })
+        self.assertEqual(before.status_code,403)
+        created=self.client.post("/api/admin/access-users",json={
+            "login":"r137testadmin","password":"AVeryStrongPassword2026!",
+            "label":"Nowy administrator","role":"admin",
+            "confirm_admin":"UTWORZ ADMINISTRATORA"
+        },headers=self.key)
+        self.assertEqual(created.status_code,201,created.get_json())
+        users=self.client.get("/api/admin/access-users",headers=self.key).get_json()["users"]
+        admin=next(u for u in users if u["login"]=="r137testadmin")
+        self.assertEqual(admin["role"],"admin")
+        self.assertEqual(self.client.post("/api/login",json={
+            "login":"r137testadmin","password":"AVeryStrongPassword2026!"
+        }).status_code,200)
+        self.assertEqual(self.client.patch("/api/admin/access-users",json={
+            "id":admin["id"],"action":"delete","confirm_login":"r137testadmin"
+        },headers=self.key).status_code,400)
+        self.assertEqual(self.client.patch("/api/admin/access-users",json={
+            "id":admin["id"],"action":"disable"
+        },headers=self.key).status_code,200)
+        self.assertEqual(self.client.get("/api/vehicles").status_code,401)
+        self.assertEqual(self.client.post("/api/login",json={
+            "login":"r137testadmin","password":"AVeryStrongPassword2026!"
+        }).status_code,401)
+        self.assertEqual(self.client.patch("/api/admin/access-users",json={
+            "id":admin["id"],"action":"enable"
+        },headers=self.key).status_code,200)
+        self.assertEqual(self.client.patch("/api/admin/access-users",json={
+            "id":admin["id"],"action":"delete","confirm_login":"r137testadmin",
+            "confirm_admin":"USUN ADMINISTRATORA"
+        },headers=self.key).status_code,200)
+        self.assertFalse(any(u["login"]=="r137testadmin" for u in
+            self.client.get("/api/admin/access-users",headers=self.key).get_json()["users"]))
+
+    def test_reviewer_promotion_requires_new_password(self):
+        self.assertEqual(self.client.post("/api/admin/access-users",json={
+            "login":"r137reviewer","password":"abcdef","label":"Serwis"
+        },headers=self.key).status_code,201)
+        user=next(u for u in self.client.get("/api/admin/access-users",headers=self.key).get_json()["users"] if u["login"]=="r137reviewer")
+        self.assertEqual(self.client.patch("/api/admin/access-users",json={
+            "id":user["id"],"action":"role","role":"admin"
+        },headers=self.key).status_code,400)
+        self.assertEqual(self.client.patch("/api/admin/access-users",json={
+            "id":user["id"],"action":"role","role":"admin","password":"AVeryStrongPassword2026!"
+        },headers=self.key).status_code,200)
+        self.assertEqual(self.client.post("/api/login",json={"login":"r137reviewer","password":"abcdef"}).status_code,401)
+        self.assertEqual(self.client.post("/api/login",json={"login":"r137reviewer","password":"AVeryStrongPassword2026!"}).status_code,200)
+        self.assertEqual(self.client.patch("/api/admin/access-users",json={
+            "id":user["id"],"action":"delete","confirm_login":"r137reviewer",
+            "confirm_admin":"USUN ADMINISTRATORA"
+        },headers=self.key).status_code,200)
+
     def test_invalid_and_unauthorized(self):
         self.assertEqual(self.client.get("/api/admin/access-users").status_code,403)
         self.assertEqual(self.client.post("/api/admin/access-users",json={"login":"wrong","password":"123456"},headers={"X-AWM-Key":"bad"}).status_code,403)

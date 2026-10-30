@@ -40,7 +40,11 @@ def _vehicle(pid):
         return None
 def _safe(x): return secure_filename(str(x or "")) or "file"
 def _init_admin():
-    if not _one(sb.table("users").select("id").eq("login",ADMIN_USER).limit(1).execute()):
+    # Nie przywracaj usunietego konta startowego po restarcie serwera,
+    # jesli inny administrator istnieje.
+    active=_one(sb.table("users").select("id").eq("role","admin").limit(1).execute())
+    disabled=_one(sb.table("users").select("id").eq("role","admin_disabled").limit(1).execute())
+    if not active and not disabled:
         sb.table("users").insert({"login":ADMIN_USER,"pass":ph(ADMIN_PASS),"role":"admin"}).execute()
 def _delete_docs(vid,kinds=None):
     q=sb.table("docs").select("id,path,kind").eq("vehicle_id",vid).execute()
@@ -113,7 +117,7 @@ def login():
     if request.method=="GET": return __import__("flask").redirect("/")
     d=request.get_json(silent=True) or {}
     u=_one(sb.table("users").select("*").eq("login",d.get("login","")).limit(1).execute())
-    if not u or u.get("role")=="disabled" or not okp(d.get("password",d.get("pass","")),u["pass"]): return jsonify(error="Bledny login lub haslo"),401
+    if not u or u.get("role") in ("disabled","admin_disabled") or not okp(d.get("password",d.get("pass","")),u["pass"]): return jsonify(error="Bledny login lub haslo"),401
     session["user"]={"id":u["id"],"login":u["login"],"role":u.get("role","admin")}; session["role"]=u.get("role","admin"); return jsonify(ok=True)
 def vehicles():
     if "user" not in session: return jsonify(error="auth"),401
