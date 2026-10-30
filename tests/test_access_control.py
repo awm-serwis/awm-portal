@@ -70,7 +70,7 @@ class AccessTests(unittest.TestCase):
         self.client.post("/api/login",json={"login":"dominik","password":"abcdef"})
         response=self.client.get("/api/me")
         self.assertEqual(response.status_code,200)
-        self.assertEqual(response.get_json()["user"]["display_name"],"Dominik")
+        self.assertEqual(response.get_json()["user"]["display_name"],"Dominik Kowalski")
         homepage=self.client.get("/").get_data(as_text=True)
         self.assertIn("Witaj, ",homepage)
         self.assertIn("awmWelcome",homepage)
