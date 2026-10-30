@@ -113,7 +113,7 @@ def login():
     if request.method=="GET": return __import__("flask").redirect("/")
     d=request.get_json(silent=True) or {}
     u=_one(sb.table("users").select("*").eq("login",d.get("login","")).limit(1).execute())
-    if not u or not okp(d.get("password",d.get("pass","")),u["pass"]): return jsonify(error="Bledny login lub haslo"),401
+    if not u or u.get("role")=="disabled" or not okp(d.get("password",d.get("pass","")),u["pass"]): return jsonify(error="Bledny login lub haslo"),401
     session["user"]={"id":u["id"],"login":u["login"],"role":u.get("role","admin")}; session["role"]=u.get("role","admin"); return jsonify(ok=True)
 def vehicles():
     if "user" not in session: return jsonify(error="auth"),401
@@ -160,15 +160,15 @@ def file_route(i):
     return send_file(BytesIO(data),download_name=d["name"],mimetype=mimetypes.guess_type(d["name"])[0] or "application/octet-stream",as_attachment=request.args.get("download")=="1")
 def admin_access():
     if not api_ok(): return jsonify(error="bad key"),403
-    users=_rows(sb.table("users").select("*").order("id").execute())
+    users=_rows(sb.table("users").select("*").eq("role","admin").order("id").execute())
     if request.method=="GET": return jsonify(login=(users[0]["login"] if users else ADMIN_USER))
     d=request.get_json(silent=True) or {}; login=str(d.get("login","")).strip(); pw=str(d.get("password",""))
     if not login or not pw: return jsonify(error="Brak loginu lub hasla"),400
     if users:
         sb.table("users").update({"login":login,"pass":ph(pw),"role":"admin"}).eq("id",users[0]["id"]).execute()
-        for u in users[1:]: sb.table("users").delete().eq("id",u["id"]).execute()
+        # Konto administratora mozna zmienic bez usuwania pozostalych kont.
     else: sb.table("users").insert({"login":login,"pass":ph(pw),"role":"admin"}).execute()
-    session["user"]=login; return jsonify(ok=True)
+    session["user"]={"id":users[0]["id"] if users else None,"login":login,"role":"admin"}; return jsonify(ok=True)
 def admin_vehicles():
     if not api_ok(): return jsonify(error="bad key"),403
     vs=_rows(sb.table("vehicles").select("*").order("updated",desc=True).execute())
