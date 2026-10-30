@@ -44,6 +44,21 @@ def install_access_control(app):
                     c.execute("UPDATE users SET "+key+"=? WHERE id=?",(value,uid))
                 c.commit()
             finally: c.close()
+    def delete_account(uid, login):
+        if supa():
+            from supabase_backend import sb
+            sb.table("users").delete().eq("id",uid).eq("login",login).execute()
+        else:
+            c=db()
+            try:
+                c.execute("DELETE FROM users WHERE id=? AND login=? AND role!='admin'",(uid,login))
+                c.commit()
+            finally: c.close()
+        c=audit_db()
+        try:
+            c.execute("DELETE FROM reviewer_labels WHERE login=?",(login,))
+            c.commit()
+        finally: c.close()
     def insert_account(login, password):
         if supa():
             from supabase_backend import sb
@@ -103,7 +118,11 @@ def install_access_control(app):
             return jsonify(error="Konto administratora jest chronione"),403
         operation=data.get("action")
         try:
-            if operation in ("disable","enable"): change_account(uid,role=("disabled" if operation=="disable" else "reviewer"))
+            if operation=="delete":
+                if str(data.get("confirm_login") or "")!=str(target["login"]):
+                    return jsonify(error="Potwierdz dokladny login usuwanego konta"),400
+                delete_account(uid,target["login"])
+            elif operation in ("disable","enable"): change_account(uid,role=("disabled" if operation=="disable" else "reviewer"))
             elif operation=="label":
                 label=str(data.get("label") or "").strip()[:100]
                 c=audit_db()
