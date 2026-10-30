@@ -86,11 +86,26 @@ def install(app):
         except Exception:return err('Nie udało się usunąć publikacji',503)
     @app.get('/api/warsztat/cases')
     def awm_workshop_list_r42():
-        if not admin():return err('Wymagane uprawnienia warsztatu',403)
+        role=(session.get('user') or {}).get('role')
+        if role not in ('admin','workshop','workshop_guest'):
+            return err('Wymagane zalogowane konto Warsztatu',403)
         try:
             rows=sb.table('awm_workshop_cases').select('id,repair_no,label,repair_title,vehicle,stages,updated_at,photo_path').order('updated_at',desc=True).limit(150).execute().data or []
+            if role=='workshop_guest':
+                # Guests can select a vehicle and see its repair status, but never
+                # receive VIN, customer data, costs, notes or photos before PIN.
+                cases=[]
+                for r in rows:
+                    vehicle=r.get('vehicle') or {}
+                    stages=[{'name':str(x.get('name',''))[:90]} for x in (r.get('stages') or []) if isinstance(x,dict)]
+                    cases.append({'id':r['id'], 'repair_no':r.get('repair_no'),
+                                  'vehicle':{k:vehicle.get(k,'') for k in ('marka','model','rejestracja')},
+                                  'stages':stages})
+                return jsonify(ok=True,cases=cases)
             return jsonify(ok=True,cases=[public(r) for r in rows])
-        except Exception:return err('Błąd odczytu zleceń',503)
+        except Exception:
+            app.logger.exception('Warsztat vehicle list unavailable')
+            return err('Błąd odczytu zleceń',503)
     @app.post('/api/warsztat/cases/<uuid:cid>/unlock')
     def awm_workshop_unlock_r42(cid):
         cid=str(cid)
