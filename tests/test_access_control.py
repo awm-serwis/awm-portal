@@ -71,6 +71,10 @@ class AccessTests(unittest.TestCase):
         response=self.client.get("/api/me")
         self.assertEqual(response.status_code,200)
         self.assertEqual(response.get_json()["user"]["display_name"],"Dominik Kowalski")
+        self.assertEqual(self.client.patch("/api/admin/access-users",
+            json={"id":next(u["id"] for u in self.client.get("/api/admin/access-users",headers=self.key).get_json()["users"] if u["login"]=="dominik"),
+                  "action":"label","label":"Domi"},headers=self.key).status_code,200)
+        self.assertEqual(self.client.get("/api/me").get_json()["user"]["display_name"],"Domi")
         homepage=self.client.get("/").get_data(as_text=True)
         self.assertIn("Witaj, ",homepage)
         self.assertIn("awmWelcome",homepage)
