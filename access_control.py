@@ -76,7 +76,7 @@ def install_access_control(app):
             password=str(data.get("password") or "")
             label=str(data.get("label") or "").strip()[:100]
             if not re.fullmatch(r"[A-Za-z0-9_.-]{3,60}",name): return jsonify(error="Login: 3–60 znakow, litery/cyfry/._-"),400
-            if not 12<=len(password)<=128: return jsonify(error="Haslo musi miec co najmniej 12 znakow"),400
+            if not 6<=len(password)<=128: return jsonify(error="Haslo musi miec co najmniej 6 znakow"),400
             if name.lower() in {str(u["login"]).lower() for u in list_accounts()}:
                 return jsonify(error="Login jest juz zajety"),409
             try:
@@ -110,7 +110,7 @@ def install_access_control(app):
                 finally: c.close()
             elif operation=="password":
                 password=str(data.get("password") or "")
-                if not 12<=len(password)<=128:return jsonify(error="Haslo musi miec co najmniej 12 znakow"),400
+                if not 6<=len(password)<=128:return jsonify(error="Haslo musi miec co najmniej 6 znakow"),400
                 change_account(uid,**{"pass":ph(password)})
             else:return jsonify(error="Nieznana operacja"),400
         except Exception:
