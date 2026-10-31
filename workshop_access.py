@@ -42,11 +42,11 @@ button{background:#087d53;color:#fff;border:0;padding:11px 17px;border-radius:8p
 button:focus-visible{outline:3px solid #e4b34a}button:hover{background:#066d48}
 button:disabled{opacity:.6;cursor:wait}
 label{display:block;margin:9px 0 5px;font-weight:700}
-#vehicles{display:grid;grid-template-columns:repeat(auto-fit,minmax(275px,1fr));gap:13px;margin-top:15px}
+#vehicles{display:grid;grid-template-columns:1fr;gap:13px;margin-top:15px}
 .vehicle{background:#f9fcfa;border:1px solid #d7e6dc;padding:16px;border-radius:13px;display:flex;flex-direction:column;gap:10px}
 .vehicle h3{font-size:19px;margin:0;overflow-wrap:anywhere}.vehicle .meta{font-size:13px;color:#60776b}
 .status{display:inline-flex;align-items:center;align-self:flex-start;background:#e6f4ec;color:#086940;border-radius:7px;padding:6px 10px;font-size:13px;font-weight:800}
-.vehicle button{margin-top:auto;align-self:flex-start}.vehicle.selected{border-color:#168656;box-shadow:0 0 0 2px #18895625}
+.vehicle button{align-self:flex-start}.vehicle-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:4px}.vehicle-detail{padding:10px 12px;background:#fff;border:1px solid #e0ebe4;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}.vehicle-detail strong{display:block;color:#3c6654;font-size:12px}.vehicle-detail span{display:block;font-size:14px}.vehicle-media{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.vehicle-media img{height:95px;max-width:145px;object-fit:contain;border-radius:8px}.vehicle-media a{color:#086b48;font-weight:650;font-size:13px}@media(max-width:650px){.vehicle-details{grid-template-columns:1fr}}.vehicle.selected{border-color:#168656;box-shadow:0 0 0 2px #18895625}
 #pinPanel[hidden],#result[hidden]{display:none}#pinPanel{border:2px solid #158653;background:#fbfffc}
 .pin-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;max-width:470px}
 #pin{letter-spacing:5px;font-size:22px;max-width:230px}#result .item{padding:10px 0;border-bottom:1px solid #d8e4de;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -54,7 +54,7 @@ label{display:block;margin:9px 0 5px;font-weight:700}
 @media(max-width:540px){.pin-grid{grid-template-columns:1fr}#pin{max-width:100%}main{padding:0 12px}}
 </style></head><body>
 <header><div><strong>AWM WARSZTAT</strong><small>Lista pojazdów i aktualne etapy naprawy</small></div><button id="exit" type="button" style="background:#a52e39">WYLOGUJ</button></header>
-<main><section class="panel"><h1>Lista pojazdów</h1><p class="muted">Widzisz wyłącznie pojazdy przypisane do Twojego loginu. Kliknij kartę, aby zobaczyć szczegóły bez PIN-u.</p>
+<main><section class="panel"><h1>Lista pojazdów</h1><p class="muted">Wszystkie dostępne informacje o Twoich pojazdach są widoczne poniżej, bez dodatkowego przycisku ani PIN-u.</p>
 <label for="filter">Wyszukaj pojazd</label><input id="filter" type="search" placeholder="Marka, model, rejestracja, numer zlecenia lub status">
 <div id="vehicles" aria-live="polite"><p class="muted">Ładowanie listy pojazdów…</p></div>
 <p id="listError" class="error" role="alert"></p></section>
@@ -76,7 +76,43 @@ function render(){
   const h=document.createElement('h3');h.textContent=[car.marka,car.model].filter(Boolean).join(' ')||'Pojazd';item.appendChild(h);
   const meta=document.createElement('span');meta.className='meta';meta.textContent='Rejestracja: '+(car.rejestracja||'—')+(c.repair_no?'  •  Zlecenie: '+c.repair_no:'');item.appendChild(meta);
   const st=document.createElement('span');st.className='status';st.textContent='● '+status;item.appendChild(st);
-  const btn=document.createElement('button');btn.type='button';btn.textContent='OTWÓRZ KARTĘ';btn.addEventListener('click',()=>openCase(c,btn));item.appendChild(btn);
+  // Full authorized repair summary is always visible inside the vehicle card.
+  const sec=c.sections||{};
+  const details=document.createElement('div');details.className='vehicle-details';
+  const add=(title,value)=>{
+   if(value===undefined||value===null)return;
+   const row=document.createElement('div');row.className='vehicle-detail';
+   const key=document.createElement('strong');key.textContent=title;row.appendChild(key);
+   const val=document.createElement('span');val.textContent=typeof value==='object'
+     ?Object.entries(value).map(([k,v])=>k+': '+String(v??'')).join(' • '):String(value);
+   row.appendChild(val);details.appendChild(row);
+  };
+  add('Usterka',sec.usterka||c.repair_title||'—');
+  add('Diagnoza',sec.diagnoza||'—');
+  add('Status',status);
+  const cost=sec.koszty||{};
+  add('Koszty netto',typeof cost==='object'
+    ?'Części: '+String(cost.czesci??'0')+' zł  •  Robocizna: '+String(cost.robocizna??'0')+' zł  •  Razem: '+String(cost.razem??'0')+' zł'
+    :cost||'—');
+  if(sec.zakres)add('Zakres naprawy',sec.zakres);
+  if(sec.czesci)add('Części',sec.czesci);
+  if(sec.terminy)add('Terminy',sec.terminy);
+  item.appendChild(details);
+  const media=document.createElement('div');media.className='vehicle-media';
+  if(c.has_photo){
+   const img=document.createElement('img');img.alt='Zdjęcie pojazdu';
+   img.src='/api/warsztat/cases/'+encodeURIComponent(c.id)+'/photo';img.loading='lazy';
+   media.appendChild(img);
+  }
+  for(const a of (Array.isArray(c.attachments)?c.attachments:[])){
+   if(!a||!a.id)continue;
+   const link=document.createElement('a');
+   link.href='/api/warsztat/cases/'+encodeURIComponent(c.id)+'/attachments/'+encodeURIComponent(a.id);
+   link.target='_blank';link.rel='noopener noreferrer';
+   link.textContent=(a.kind==='report'?'📄 Raport PDF: ':a.kind==='vehicle_photo'?'🚘 Zdjęcie pojazdu: ':'📷 Zdjęcie usterki: ')+String(a.name||'Załącznik');
+   media.appendChild(link);
+  }
+  if(media.childElementCount)item.appendChild(media);
   const consent=c.approval||{};
   if(status==='Oczekiwanie na zgodę klienta'&&consent.status==='pending'){
    const consentBox=document.createElement('div');
@@ -112,7 +148,7 @@ function render(){
 async function load(){
  try{const r=await fetch('/api/warsztat/cases',{credentials:'same-origin',cache:'no-store'});const x=await r.json();
  if(!r.ok||!x.ok||!Array.isArray(x.cases))throw Error(x.error||'Nie udało się pobrać listy');
- cases=x.cases;render();const requested=new URLSearchParams(location.search).get('case');const found=cases.find(c=>c.id===requested);if(found){const btn=[...document.querySelectorAll(".vehicle")].find(n=>n.dataset.id===requested)?.querySelector("button");if(btn)openCase(found,btn)}
+ cases=x.cases;render();const requested=new URLSearchParams(location.search).get('case');if(requested){const card=[...document.querySelectorAll(".vehicle")].find(n=>n.dataset.id===requested);if(card)card.scrollIntoView({block:'start'})}
  }catch(e){$('vehicles').replaceChildren();$('listError').textContent=e.message||'Brak połączenia'}
 }
 $('filter').addEventListener('input',render);load();
