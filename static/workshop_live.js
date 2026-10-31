@@ -48,6 +48,29 @@
    '<div class="awm-repair-grid"><div class="vehicle-card awm-primary-vehicle"><div class="car-photo photo-slot">'+(current.has_photo?'Ładowanie zdjęcia…':'🚘')+'</div><div class="vehicle-info"><h2>'+escape([p.marka,p.model].filter(Boolean).join(' '))+'</h2><p>Rejestracja: '+escape(p.rejestracja||'—')+'</p><p class="awm-primary-status">Status: '+escape(status)+'</p></div></div>'+
    '<nav class="awm-repair-tabs" aria-label="Sekcje naprawy">'+shown.map((z,i)=>'<button type="button" class="awm-repair-tab" data-section="'+escape(z[1])+'" aria-expanded="false">'+z[0]+'</button>').join('')+'</nav></div>'+
    '<div class="awm-repair-content" aria-live="polite">'+shown.map(z=>'<div class="awm-repair-panel" data-panel="'+escape(z[1])+'" hidden><h3>'+z[0]+'</h3><div class="inner">'+z[2]+'</div></div>').join('')+'</div>';
+
+  // Read-only consent and protected diagnostic reports / vehicle photos.
+  const consent=current.approval||{};
+  if(consent.status==='pending'||consent.status==='approved'){
+   const info=document.createElement('p');
+   info.style.cssText='padding:10px;background:#e7f4ed;border-radius:8px;font-weight:700;margin:10px 0';
+   info.textContent=consent.status==='approved'
+     ?'✓ Zgoda klienta: '+(consent.person||'—')+' • '+(consent.decided_at?new Date(consent.decided_at).toLocaleString('pl-PL'):'—')
+     :'⏳ Oczekiwanie na zgodę klienta';
+   section.appendChild(info);
+  }
+  if(Array.isArray(current.attachments)&&current.attachments.length){
+   const files=document.createElement('div');files.style.cssText='padding:12px;background:white;border:1px solid #d1e4d8;border-radius:9px;margin:10px 0';
+   const title=document.createElement('h3');title.textContent='Raporty PDF i zdjęcia';files.appendChild(title);
+   for(const item of current.attachments){
+    if(!item||!item.id)continue;
+    const link=document.createElement('a');link.textContent=(item.kind==='report'?'📄 ':'📷 ')+String(item.name||'Załącznik');
+    link.href='/api/warsztat/cases/'+encodeURIComponent(v.id)+'/attachments/'+encodeURIComponent(item.id);
+    link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='display:block;margin:6px 0;font-weight:700';
+    files.appendChild(link);
+   }
+   section.appendChild(files);
+  }
   list.after(section);
   list.hidden=true;
   list.style.setProperty('display','none','important');
