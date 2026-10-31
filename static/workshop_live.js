@@ -20,12 +20,37 @@
  const selectedHead=root.querySelector('.preview-head h1');
  const originalTitle=selectedHead.textContent;
  let current=null;
- function card(v){const p=v.vehicle||{};const name=[p.marka,p.model].filter(Boolean).join(' ')||v.label||'Pojazd';
-  const div=document.createElement('article');div.className='vehicle-card';div.dataset.needle=[name,p.vin,p.rejestracja,v.repair_no,v.repair_title].join(' ').toLowerCase();
+ function card(v){
+  const p=v.vehicle||{},sec=v.sections||{},name=[p.marka,p.model].filter(Boolean).join(' ')||v.label||'Pojazd';
+  const div=document.createElement('article');div.className='vehicle-card';
+  div.dataset.needle=[name,p.vin,p.rejestracja,v.repair_no,v.repair_title,sec.usterka,sec.diagnoza].join(' ').toLowerCase();
   const status=(Array.isArray(v.stages)?v.stages:[]).at(-1)?.name||'Przyjęty do warsztatu';
-  div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie w karcie</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div><div class="side"><button class="awm-open-repair" type="button">OTWÓRZ KARTĘ</button></div>';
-  div.querySelector('button').onclick=async(event)=>{event.preventDefault();event.stopPropagation();const btn=event.currentTarget;btn.disabled=true;try{await open(v)}catch(e){alert(e.message||'Nie można otworzyć karty')}finally{btn.disabled=false}};
-  return div;}
+  const cost=sec.koszty||{},money=typeof cost==='object'
+   ?'Części: '+String(cost.czesci??'0')+' zł • Robocizna: '+String(cost.robocizna??'0')+' zł • Razem: '+String(cost.razem??'0')+' zł'
+   :String(cost||'—');
+  div.innerHTML='<div class="vehicle-info" style="padding:12px;min-width:0"><h2>'+escape(name)+'</h2>'+
+   '<p style="font-size:12px">Rejestracja: '+escape(p.rejestracja||'—')+(v.repair_no?' • Zlecenie: '+escape(v.repair_no):'')+'</p>'+
+   '<div class="awm-all-fields" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">'+
+   [['Usterka',sec.usterka||v.repair_title||'—'],['Diagnoza',sec.diagnoza||'—'],['Status',status],['Koszty netto',money]].map(x=>
+    '<div style="padding:8px;background:#f4faf6;border:1px solid #dfebe3;border-radius:7px;overflow-wrap:anywhere">'+
+    '<small style="display:block;color:#627a6b">'+escape(x[0])+'</small><strong style="white-space:pre-wrap">'+escape(x[1])+'</strong></div>').join('')+
+   '</div></div>';
+  div.style.cssText='display:block!important;min-width:0!important;cursor:default!important;height:auto!important';
+  if(v.has_photo){
+   const img=document.createElement('img');img.alt='Zdjęcie pojazdu';img.loading='lazy';
+   img.src='/api/warsztat/cases/'+encodeURIComponent(v.id)+'/photo';
+   img.style.cssText='max-width:180px;max-height:110px;object-fit:contain;margin:8px;border-radius:8px';
+   div.appendChild(img);
+  }
+  for(const a of (Array.isArray(v.attachments)?v.attachments:[])){
+   if(!a?.id)continue;
+   const link=document.createElement('a');link.textContent=(a.kind==='report'?'📄 Raport PDF: ':'📷 Zdjęcie: ')+String(a.name||'Plik');
+   link.href='/api/warsztat/cases/'+encodeURIComponent(v.id)+'/attachments/'+encodeURIComponent(a.id);
+   link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='display:block;margin:5px 12px;font-weight:700';
+   div.appendChild(link);
+  }
+  return div;
+ }
  const nodes=cases.map(card);nodes.forEach(n=>list.appendChild(n));
  search.oninput=()=>{let s=search.value.toLowerCase().trim();nodes.forEach(n=>n.hidden=!n.dataset.needle.includes(s))};
  const searchBtn=document.querySelector('.awm-workshop-search button');if(searchBtn)searchBtn.onclick=()=>search.dispatchEvent(new Event('input'));
