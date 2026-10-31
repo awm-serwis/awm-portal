@@ -42,7 +42,7 @@ button{background:#087d53;color:#fff;border:0;padding:11px 17px;border-radius:8p
 button:focus-visible{outline:3px solid #e4b34a}button:hover{background:#066d48}
 button:disabled{opacity:.6;cursor:wait}
 label{display:block;margin:9px 0 5px;font-weight:700}
-#vehicles{display:grid;grid-template-columns:1fr;gap:13px;margin-top:15px}
+#vehicles{display:grid;grid-template-columns:1fr;gap:13px;margin-top:0}
 .vehicle{background:#f9fcfa;border:1px solid #d7e6dc;padding:16px;border-radius:13px;display:flex;flex-direction:column;gap:10px}
 .vehicle h3{font-size:19px;margin:0;overflow-wrap:anywhere}.vehicle .meta{font-size:13px;color:#60776b}
 .status{display:inline-flex;align-items:center;align-self:flex-start;background:#e6f4ec;color:#086940;border-radius:7px;padding:6px 10px;font-size:13px;font-weight:800}
@@ -54,9 +54,8 @@ label{display:block;margin:9px 0 5px;font-weight:700}
 @media(max-width:540px){.pin-grid{grid-template-columns:1fr}#pin{max-width:100%}main{padding:0 12px}}
 </style></head><body>
 <header><div><strong>AWM WARSZTAT</strong><small>Lista pojazdów i aktualne etapy naprawy</small></div><button id="exit" type="button" style="background:#a52e39">WYLOGUJ</button></header>
-<main><section class="panel"><h1>Lista pojazdów</h1><p class="muted">Wszystkie dostępne informacje o Twoich pojazdach są widoczne poniżej, bez dodatkowego przycisku ani PIN-u.</p>
-<label for="filter">Wyszukaj pojazd</label><input id="filter" type="search" placeholder="Marka, model, rejestracja, numer zlecenia lub status">
-<div id="vehicles" aria-live="polite"><p class="muted">Ładowanie listy pojazdów…</p></div>
+<main><section class="panel" aria-label="Twoje pojazdy">
+<div id="vehicles" aria-live="polite"><p class="muted">Ładowanie pojazdów…</p></div>
 <p id="listError" class="error" role="alert"></p></section>
 <section id="result" class="panel" hidden><h2 id="title">Szczegóły zlecenia</h2><div id="details"></div><img id="photo" alt="Zdjęcie pojazdu" hidden></section></main>
 __RODO_NOTICE__
@@ -66,10 +65,9 @@ $('exit').addEventListener('click',async()=>{const r=await fetch('/api/logout',{
 function put(parent,key,val){const d=document.createElement('div');d.className='item';const b=document.createElement('strong');b.textContent=key+': ';d.appendChild(b);const t=document.createElement('span');t.textContent=typeof val==='object'?JSON.stringify(val,null,2):String(val??'');d.appendChild(t);parent.appendChild(d)}
 let cases=[];
 function render(){
- const needle=$('filter').value.toLocaleLowerCase('pl').trim(),list=$('vehicles');list.replaceChildren();
- const filtered=cases.filter(c=>{const car=c.vehicle||{};const status=Array.isArray(c.stages)?c.stages.at(-1)?.name||'':'';
- return [car.marka,car.model,car.rejestracja,c.repair_no,status].join(' ').toLocaleLowerCase('pl').includes(needle)});
- if(!filtered.length){const p=document.createElement('p');p.className='muted';p.textContent=cases.length?'Nie znaleziono pojazdów.':'Brak opublikowanych pojazdów.';list.appendChild(p);return}
+ const list=$('vehicles');list.replaceChildren();
+ const filtered=cases;
+ if(!filtered.length){const p=document.createElement('p');p.className='muted';p.textContent='Brak udostępnionych pojazdów.';list.appendChild(p);return}
  for(const c of filtered){
   const car=c.vehicle||{},status=(Array.isArray(c.stages)?c.stages.at(-1)?.name:'')||'Przyjęty do warsztatu';
   const item=document.createElement('article');item.className='vehicle';item.dataset.id=String(c.id);
@@ -151,7 +149,7 @@ async function load(){
  cases=x.cases;render();const requested=new URLSearchParams(location.search).get('case');if(requested){const card=[...document.querySelectorAll(".vehicle")].find(n=>n.dataset.id===requested);if(card)card.scrollIntoView({block:'start'})}
  }catch(e){$('vehicles').replaceChildren();$('listError').textContent=e.message||'Brak połączenia'}
 }
-$('filter').addEventListener('input',render);load();
+load();
 async function openCase(c,button){
  const id=c.id,box=$('result');box.hidden=true;$('listError').textContent='';
  button.disabled=true;
