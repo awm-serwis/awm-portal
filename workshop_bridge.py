@@ -1,4 +1,4 @@
-"""AWM R42 workshop bridge. Authenticated desktop publish; customer PIN verification."""
+"""AWM Warsztat: account-assigned repairs without vehicle PINs."""
 import base64, binascii, hashlib, hmac, io, os, secrets, time
 from datetime import datetime
 from flask import jsonify, request, session, send_file, Response
@@ -64,7 +64,7 @@ def install(app):
             data={'source':'AWM WARSZTAT','desktop_case_id':cid,
                   'repair_no':clean_text(x.get('repair_no'),80),'label':clean_text(x.get('label'),220),
                   'repair_title':clean_text(x.get('repair_title'),200),
-                  'vehicle':vehicle,'stages':stages,'sections':dict(sections, **{_ACCESS_KEY:recipients}), 'pin_hash':None,'updated_at':datetime.utcnow().isoformat()+'Z'}
+                  'vehicle':vehicle,'stages':stages,'sections':dict(sections, **{_ACCESS_KEY:recipients}), 'updated_at':datetime.utcnow().isoformat()+'Z'}
             photo=x.get('photo')
             if isinstance(photo,dict) and photo.get('data_b64'):
                 try: raw=base64.b64decode(photo['data_b64'],validate=True)
