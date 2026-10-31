@@ -1,6 +1,6 @@
 """AWM Warsztat: account-assigned repairs without vehicle PINs."""
 import base64, binascii, hashlib, hmac, io, os, secrets, time, uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import jsonify, request, session, send_file, Response
 from werkzeug.utils import secure_filename
 
@@ -40,6 +40,10 @@ def install(app):
             record=records[0] if records else None
         sec=(record or {}).get('sections') or {}
         return isinstance(sec,dict) and str(u['id']) in [str(x) for x in sec.get(_ACCESS_KEY,[])]
+    def approval_public(row):
+        record=(row.get('sections') or {}).get('_awm_approval') or {}
+        if not isinstance(record,dict):record={}
+        return {k:str(record.get(k) or '') for k in ('status','person','decided_at','request_id')}
     @app.post('/api/admin/workshop/cases')
     def awm_workshop_publish_r42():
         if not api():return err('Brak autoryzacji programu AWM',403)
@@ -51,6 +55,7 @@ def install(app):
         vehicle={k:clean_text(vehicle.get(k),150) for k in ('marka','model','rok','rejestracja','vin','przebieg','typ')}
         stages=x.get('stages') if isinstance(x.get('stages'),list) else []
         stages=[{'name':clean_text(y.get('name'),90),'since':clean_text(y.get('since'),60)} for y in stages[:20] if isinstance(y,dict)]
+        incoming_status=stages[-1]['name'] if stages else 'Przyjęty'
         sec=x.get('sections') if isinstance(x.get('sections'),dict) else {}
         allowed=('usterka','diagnoza','zakres','czesci','koszty','terminy','zgody','notatki')
         sections={k:sec[k] for k in allowed if k in sec}
@@ -60,12 +65,21 @@ def install(app):
             app.logger.exception('Cannot check workshop access accounts')
             return err('Nie udało się sprawdzić kont klientów',503)
         try:
-            existing=sb.table('awm_workshop_cases').select('id,photo_path,pin_hash,sections').eq('source','AWM WARSZTAT').eq('desktop_case_id',cid).limit(1).execute().data or []
+            existing=sb.table('awm_workshop_cases').select('id,photo_path,pin_hash,sections,stages').eq('source','AWM WARSZTAT').eq('desktop_case_id',cid).limit(1).execute().data or []
             old=existing[0] if existing else None
+            previous_sections=(old or {}).get('sections') or {}
+            if not isinstance(previous_sections,dict):previous_sections={}
+            old_stage=(old or {}).get('stages') or []
+            old_status=old_stage[-1].get('name','') if old_stage else ''
+            approval=previous_sections.get('_awm_approval')
+            if incoming_status=='Oczekiwanie na zgodę klienta' and (old_status!='Oczekiwanie na zgodę klienta' or not isinstance(approval,dict)):
+                approval={'status':'pending','person':'','decided_at':'','request_id':str(uuid.uuid4())}
+            elif not isinstance(approval,dict):
+                approval={'status':'none','person':'','decided_at':'','request_id':''}
             data={'source':'AWM WARSZTAT','desktop_case_id':cid,
                   'repair_no':clean_text(x.get('repair_no'),80),'label':clean_text(x.get('label'),220),
                   'repair_title':clean_text(x.get('repair_title'),200),
-                  'vehicle':vehicle,'stages':stages,'sections':dict(sections, **{_ACCESS_KEY:recipients}), 'updated_at':datetime.utcnow().isoformat()+'Z'}
+                  'vehicle':vehicle,'stages':stages,'sections':dict(sections, **{_ACCESS_KEY:recipients, '_awm_approval':approval}), 'updated_at':datetime.utcnow().isoformat()+'Z'}
             photo=x.get('photo')
             if isinstance(photo,dict) and photo.get('data_b64'):
                 try: raw=base64.b64decode(photo['data_b64'],validate=True)
@@ -75,9 +89,7 @@ def install(app):
                 sb.storage.from_(BUCKET).upload(path,raw,file_options={'content-type':'image/jpeg'})
                 data['photo_path']=path
             if old:
-                previous=old.get('sections') or {}
-                if isinstance(previous,dict):
-                    data['sections']['_awm_attachments']=previous.get('_awm_attachments') or []
+                data['sections']['_awm_attachments']=previous_sections.get('_awm_attachments') or []
                 result=sb.table('awm_workshop_cases').update(data).eq('id',old['id']).execute().data
                 saved=old['id']
             else:
@@ -169,7 +181,7 @@ def install(app):
                 result.append({'id':r['id'],'repair_no':r.get('repair_no'),'label':r.get('label'),
                                'repair_title':r.get('repair_title'),'vehicle':vehicle,
                                'stages':r.get('stages') or [],'has_photo':bool(r.get('photo_path')),
-                               'updated_at':r.get('updated_at')})
+                               'updated_at':r.get('updated_at'), 'approval':approval_public(r)})
             return jsonify(ok=True,cases=result)
         except Exception:
             app.logger.exception('Cannot verify workshop vehicle assignments')
@@ -210,6 +222,59 @@ def install(app):
             app.logger.exception('Assigning accounts failed')
             return err('Nie udało się zapisać przypisania',503)
 
+    @app.get('/api/admin/workshop/cases/<uuid:cid>/approval')
+    def awm_workshop_approval_read_r155(cid):
+        if not api():return err('Brak autoryzacji programu AWM',403)
+        try:
+            rows=sb.table('awm_workshop_cases').select('sections,stages').eq('id',str(cid)).limit(1).execute().data or []
+            if not rows:return err('Nie znaleziono pojazdu',404)
+            return jsonify(ok=True,approval=approval_public(rows[0]))
+        except Exception:
+            app.logger.exception('Approval read failed')
+            return err('Nie można odczytać odpowiedzi klienta',503)
+
+    @app.post('/api/warsztat/cases/<uuid:cid>/approval')
+    def awm_workshop_client_consent_r155(cid):
+        user=session.get('user')
+        if not isinstance(user,dict) or user.get('role')!='workshop_guest':
+            return err('Zgody może udzielić wyłącznie zalogowany klient',403)
+        origin=request.headers.get('Origin','').rstrip('/')
+        if origin and origin!=request.host_url.rstrip('/'):return err('Niedozwolone pochodzenie',403)
+        if request.headers.get('Sec-Fetch-Site','same-origin') not in ('same-origin','none'):
+            return err('Niedozwolone żądanie',403)
+        x=request.get_json(silent=True)
+        if not isinstance(x,dict):return err('Wymagany JSON',400)
+        person=str(x.get('person') or '').strip()
+        if len(person)<2 or len(person)>100 or any(ord(c)<32 for c in person):
+            return err('Wpisz imię i nazwisko osoby udzielającej zgody',400)
+        if x.get('confirm') is not True:return err('Potwierdź świadome udzielenie zgody',400)
+        try:
+            rows=sb.table('awm_workshop_cases').select('id,sections,stages').eq('id',str(cid)).limit(1).execute().data or []
+            if not rows:return err('Nie znaleziono pojazdu',404)
+            row=rows[0]
+            if not permitted(cid,row):return err('Nie masz dostępu do tego pojazdu',403)
+            status=(row.get('stages') or [])
+            if not status or status[-1].get('name')!='Oczekiwanie na zgodę klienta':
+                return err('Ten pojazd nie oczekuje na zgodę klienta',409)
+            sec=row.get('sections') or {}
+            approval=sec.get('_awm_approval') or {}
+            if not isinstance(approval,dict) or approval.get('status') not in ('pending','approved'):
+                return err('Brak aktywnej prośby o akceptację',409)
+            if approval.get('status')=='approved':
+                return jsonify(ok=True,approval=approval_public(row),already_confirmed=True)
+            request_id=str(x.get('request_id') or '')
+            if not request_id or request_id!=approval.get('request_id'):
+                return err('Prośba została odnowiona. Odśwież kartę pojazdu.',409)
+            approval={'status':'approved','person':person,'decided_at':datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                      'request_id':request_id,'user_id':str(user.get('id')),'login':str(user.get('login') or '')}
+            sec['_awm_approval']=approval
+            res=sb.table('awm_workshop_cases').update({'sections':sec}).eq('id',str(cid)).execute().data
+            if not res:return err('Brak potwierdzenia zapisu zgody',503)
+            return jsonify(ok=True,approval=approval_public({'sections':sec}))
+        except Exception:
+            app.logger.exception('Approval write failed')
+            return err('Nie udało się zapisać zgody klienta',503)
+
     @app.get('/api/warsztat/cases/<uuid:cid>')
     def awm_workshop_details_r42(cid):
         cid=str(cid)
@@ -225,6 +290,7 @@ def install(app):
         data['sections']={k:v for k,v in (r.get('sections') or {}).items() if not k.startswith('_awm_') and (admin() or k!='notatki')}
         items=(r.get('sections') or {}).get('_awm_attachments') or []
         data['attachments']=[{'id':v.get('id'),'kind':v.get('kind'),'name':v.get('name')} for v in items if isinstance(v,dict)]
+        data['approval']=approval_public(r)
         return jsonify(ok=True,case=data)
     @app.get('/api/warsztat/cases/<uuid:cid>/photo')
     def awm_workshop_photo_r42(cid):
