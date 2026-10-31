@@ -166,8 +166,10 @@ body{font-size:calc(14px * var(--ui-scale,1))}.vehicle{transform-origin:top left
 #list .tags{flex-wrap:wrap;gap:6px;margin-top:8px}
 
 /* AWM vehicle data order: year, mileage, registration, VIN */
-#list .row .details{grid-template-columns:90px 120px minmax(110px,1fr) minmax(160px,1.25fr)!important;gap:10px!important}
-@media(max-width:900px){#list .row .details{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+/* Compact vehicle metadata: keep columns adjacent instead of stretching across card. */
+#list .row .details{grid-template-columns:62px 93px 114px minmax(175px,210px)!important;gap:9px!important;justify-content:start!important}
+@media(max-width:900px){#list .row .details{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important}}
+@media(max-width:1150px) and (min-width:901px){#list .row .details{grid-template-columns:62px 84px 106px minmax(150px,190px)!important;gap:7px!important}}
 
 /* AWM: belka nawigacyjna i powitanie – stabilny uklad desktop/mobile. */
 .awm-nav-bar{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:10px;padding:10px 12px;background:#f1f7f4;border-bottom:1px solid #cbded3;min-height:58px}
