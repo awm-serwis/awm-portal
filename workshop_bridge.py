@@ -72,8 +72,14 @@ def install(app):
             old_stage=(old or {}).get('stages') or []
             old_status=old_stage[-1].get('name','') if old_stage else ''
             approval=previous_sections.get('_awm_approval')
-            if incoming_status=='Oczekiwanie na zgodę klienta' and (old_status!='Oczekiwanie na zgodę klienta' or not isinstance(approval,dict)):
-                approval={'status':'pending','person':'','decided_at':'','request_id':str(uuid.uuid4())}
+            requested_id=str(x.get('approval_request_id') or '').strip()
+            if requested_id:
+                try: requested_id=str(uuid.UUID(requested_id))
+                except (ValueError,TypeError):return err('Niepoprawny identyfikator prośby o zgodę',400)
+            is_new=(not isinstance(approval,dict) or not approval.get('request_id')
+                    or (requested_id and requested_id!=approval.get('request_id')))
+            if incoming_status=='Oczekiwanie na zgodę klienta' and (old_status!='Oczekiwanie na zgodę klienta' or is_new):
+                approval={'status':'pending','person':'','decided_at':'','request_id':requested_id or str(uuid.uuid4())}
             elif not isinstance(approval,dict):
                 approval={'status':'none','person':'','decided_at':'','request_id':''}
             data={'source':'AWM WARSZTAT','desktop_case_id':cid,
