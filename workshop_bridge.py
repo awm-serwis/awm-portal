@@ -1,7 +1,8 @@
 """AWM Warsztat: account-assigned repairs without vehicle PINs."""
-import base64, binascii, hashlib, hmac, io, os, secrets, time
+import base64, binascii, hashlib, hmac, io, os, secrets, time, uuid
 from datetime import datetime
 from flask import jsonify, request, session, send_file, Response
+from werkzeug.utils import secure_filename
 
 def install(app):
     from supabase_backend import sb
@@ -59,7 +60,7 @@ def install(app):
             app.logger.exception('Cannot check workshop access accounts')
             return err('Nie udało się sprawdzić kont klientów',503)
         try:
-            existing=sb.table('awm_workshop_cases').select('id,photo_path,pin_hash').eq('source','AWM WARSZTAT').eq('desktop_case_id',cid).limit(1).execute().data or []
+            existing=sb.table('awm_workshop_cases').select('id,photo_path,pin_hash,sections').eq('source','AWM WARSZTAT').eq('desktop_case_id',cid).limit(1).execute().data or []
             old=existing[0] if existing else None
             data={'source':'AWM WARSZTAT','desktop_case_id':cid,
                   'repair_no':clean_text(x.get('repair_no'),80),'label':clean_text(x.get('label'),220),
@@ -74,6 +75,9 @@ def install(app):
                 sb.storage.from_(BUCKET).upload(path,raw,file_options={'content-type':'image/jpeg'})
                 data['photo_path']=path
             if old:
+                previous=old.get('sections') or {}
+                if isinstance(previous,dict):
+                    data['sections']['_awm_attachments']=previous.get('_awm_attachments') or []
                 result=sb.table('awm_workshop_cases').update(data).eq('id',old['id']).execute().data
                 saved=old['id']
             else:
@@ -83,6 +87,58 @@ def install(app):
             return jsonify(ok=True,id=str(saved))
         except Exception:
             return err('Nie udało się zapisać zlecenia na platformie',503)
+    @app.post('/api/admin/workshop/cases/<uuid:cid>/attachments')
+    def awm_workshop_upload_attachment_r150(cid):
+        if not api():return err('Brak autoryzacji programu AWM',403)
+        x=request.get_json(silent=True)
+        if not isinstance(x,dict):return err('Nieprawidłowy JSON',400)
+        kind=x.get('kind')
+        if kind not in ('report','vehicle_photo','fault_photo'):return err('Nieznany rodzaj załącznika',400)
+        name=str(x.get('name') or '').strip()[:180]
+        if not name or '/' in name or '\\' in name:return err('Nieprawidłowa nazwa pliku',400)
+        data64=x.get('data_b64')
+        if not isinstance(data64,str) or len(data64)>17*1024*1024:return err('Załącznik jest zbyt duży',413)
+        try: raw=base64.b64decode(data64,validate=True)
+        except (ValueError,binascii.Error):return err('Nieprawidłowy plik',400)
+        if not raw or len(raw)>12*1024*1024:return err('Plik musi mieć od 1 B do 12 MB',413)
+        ext=os.path.splitext(name)[1].lower()
+        if kind=='report':
+            if ext!='.pdf' or not raw.startswith(b'%PDF-'):return err('Wymagany raport PDF',400)
+            mime='application/pdf'
+        else:
+            if ext in ('.jpg','.jpeg') and raw[:3]==bytes((255,216,255)):mime='image/jpeg'
+            elif ext=='.png' and raw.startswith(bytes((137,80,78,71,13,10,26,10))):mime='image/png'
+            else:return err('Wymagane zdjęcie JPG lub PNG',400)
+        digest=hashlib.sha256(raw).hexdigest()
+        try:
+            rows=sb.table('awm_workshop_cases').select('id,sections').eq('id',str(cid)).eq('source','AWM WARSZTAT').limit(1).execute().data or []
+            if not rows:return err('Nie znaleziono opublikowanego pojazdu',404)
+            sec=rows[0].get('sections') or {}
+            if not isinstance(sec,dict):return err('Nieprawidłowe sekcje zlecenia',503)
+            old=sec.get('_awm_attachments') or []
+            if not isinstance(old,list):old=[]
+            for item in old:
+                if isinstance(item,dict) and item.get('sha256')==digest and item.get('kind')==kind and item.get('name')==name:
+                    return jsonify(ok=True,id=item['id'],duplicate=True)
+            if len(old)>=100:return err('Przekroczono limit 100 załączników',409)
+            attachment_id=str(uuid.uuid4())
+            safe=secure_filename(name)[:100] or ('attachment'+ext)
+            storage_path='workshop/'+str(cid)+'/attachments/'+attachment_id+'_'+safe
+            sb.storage.from_(BUCKET).upload(storage_path,raw,file_options={'content-type':mime})
+            entry={'id':attachment_id,'kind':kind,'name':name,'path':storage_path,'mime':mime,'sha256':digest}
+            sec['_awm_attachments']=old+[entry]
+            try:
+                result=sb.table('awm_workshop_cases').update({'sections':sec}).eq('id',str(cid)).execute().data
+                if not result:raise RuntimeError('No confirmation')
+            except Exception:
+                try:sb.storage.from_(BUCKET).remove([storage_path])
+                except Exception:pass
+                raise
+            return jsonify(ok=True,id=attachment_id),201
+        except Exception:
+            app.logger.exception('Warsztat attachment upload failed')
+            return err('Nie udało się zapisać załącznika',503)
+
     @app.delete('/api/admin/workshop/cases/<uuid:cid>')
     def awm_workshop_unpublish_r45(cid):
         if not api():return err('Brak autoryzacji programu AWM',403)
@@ -167,6 +223,8 @@ def install(app):
         r=rows[0]
         data=public(r)
         data['sections']={k:v for k,v in (r.get('sections') or {}).items() if not k.startswith('_awm_') and (admin() or k!='notatki')}
+        items=(r.get('sections') or {}).get('_awm_attachments') or []
+        data['attachments']=[{'id':v.get('id'),'kind':v.get('kind'),'name':v.get('name')} for v in items if isinstance(v,dict)]
         return jsonify(ok=True,case=data)
     @app.get('/api/warsztat/cases/<uuid:cid>/photo')
     def awm_workshop_photo_r42(cid):
@@ -182,3 +240,26 @@ def install(app):
             raw=sb.storage.from_(BUCKET).download(rows[0]['photo_path'])
             return send_file(io.BytesIO(raw),mimetype='image/jpeg',max_age=60)
         except Exception:return err('Zdjęcie niedostępne',503)
+
+
+    @app.get('/api/warsztat/cases/<uuid:cid>/attachments/<uuid:aid>')
+    def awm_workshop_download_attachment_r150(cid,aid):
+        try:
+            if not permitted(str(cid)):return err('Brak dostępu do pojazdu',403)
+            rows=sb.table('awm_workshop_cases').select('sections').eq('id',str(cid)).limit(1).execute().data or []
+            if not rows:return err('Nie znaleziono pojazdu',404)
+            sec=rows[0].get('sections') or {}
+            attach=next((x for x in (sec.get('_awm_attachments') or []) if isinstance(x,dict) and x.get('id')==str(aid)),None)
+            if not attach:return err('Nie znaleziono załącznika',404)
+            raw=sb.storage.from_(BUCKET).download(attach['path'])
+            mime=attach.get('mime') or 'application/octet-stream'
+            # Render in browser or download; never expose storage bucket path.
+            response=send_file(io.BytesIO(raw),mimetype=mime,
+                as_attachment=mime not in ('application/pdf','image/jpeg','image/png'),
+                download_name=attach.get('name') or 'zalacznik',max_age=0)
+            response.headers['X-Content-Type-Options']='nosniff'
+            response.headers['Cache-Control']='private, no-store'
+            return response
+        except Exception:
+            app.logger.exception('Warsztat attachment read failed')
+            return err('Nie można pobrać załącznika',503)
