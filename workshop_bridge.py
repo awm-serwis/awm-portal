@@ -274,9 +274,15 @@ def install(app):
             approval={'status':'approved','person':person,'decided_at':datetime.now(timezone.utc).isoformat(timespec='seconds'),
                       'request_id':request_id,'user_id':str(user.get('id')),'login':str(user.get('login') or '')}
             sec['_awm_approval']=approval
-            res=sb.table('awm_workshop_cases').update({'sections':sec}).eq('id',str(cid)).execute().data
+            # The customer's acceptance immediately advances the published vehicle status.
+            # Preserve previous stage history and record the server-side confirmation time.
+            stages=list(status)
+            stages.append({'name':'Zgoda na naprawę','since':approval['decided_at']})
+            res=sb.table('awm_workshop_cases').update({
+                'sections':sec,'stages':stages,'updated_at':approval['decided_at']
+            }).eq('id',str(cid)).execute().data
             if not res:return err('Brak potwierdzenia zapisu zgody',503)
-            return jsonify(ok=True,approval=approval_public({'sections':sec}))
+            return jsonify(ok=True,approval=approval_public({'sections':sec}),stage='Zgoda na naprawę')
         except Exception:
             app.logger.exception('Approval write failed')
             return err('Nie udało się zapisać zgody klienta',503)
