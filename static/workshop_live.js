@@ -23,8 +23,13 @@
  function card(v){const p=v.vehicle||{};const name=[p.marka,p.model].filter(Boolean).join(' ')||v.label||'Pojazd';
   const div=document.createElement('article');div.className='vehicle-card';div.dataset.needle=[name,p.vin,p.rejestracja,v.repair_no,v.repair_title].join(' ').toLowerCase();
   const status=(Array.isArray(v.stages)?v.stages:[]).at(-1)?.name||'Przyjęty do warsztatu';
-  div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie w karcie</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div><div class="side"><button class="awm-open-repair" type="button">OTWÓRZ KARTĘ</button></div>';
-  div.querySelector('button').onclick=async(event)=>{event.preventDefault();event.stopPropagation();const btn=event.currentTarget;btn.disabled=true;try{await open(v)}catch(e){alert(e.message||'Nie można otworzyć karty')}finally{btn.disabled=false}};
+  div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie pojazdu</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div>';
+  div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label','Szczegóły pojazdu '+name);
+  div.style.cursor='pointer';
+  const openVehicle=async()=>{try{await open(v)}catch(e){alert(e.message||'Nie można otworzyć szczegółów')}};
+  div.addEventListener('click',openVehicle);
+  div.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openVehicle()}});
+
   return div;}
  const nodes=cases.map(card);nodes.forEach(n=>list.appendChild(n));
  search.oninput=()=>{let s=search.value.toLowerCase().trim();nodes.forEach(n=>n.hidden=!n.dataset.needle.includes(s))};
