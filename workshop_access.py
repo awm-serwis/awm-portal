@@ -46,7 +46,23 @@ label{display:block;margin:9px 0 5px;font-weight:700}
 .vehicle{background:#f9fcfa;border:1px solid #d7e6dc;padding:16px;border-radius:13px;display:flex;flex-direction:column;gap:10px}
 .vehicle h3{font-size:19px;margin:0;overflow-wrap:anywhere}.vehicle .meta{font-size:13px;color:#60776b}
 .status{display:inline-flex;align-items:center;align-self:flex-start;background:#e6f4ec;color:#086940;border-radius:7px;padding:6px 10px;font-size:13px;font-weight:800}
-.vehicle button{align-self:flex-start}.vehicle-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:4px}.vehicle-detail{padding:10px 12px;background:#fff;border:1px solid #e0ebe4;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}.vehicle-detail strong{display:block;color:#3c6654;font-size:12px}.vehicle-detail span{display:block;font-size:14px}.vehicle-media{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.vehicle-media img{height:95px;max-width:145px;object-fit:contain;border-radius:8px}.vehicle-media a{color:#086b48;font-weight:650;font-size:13px}@media(max-width:650px){.vehicle-details{grid-template-columns:1fr}}.vehicle.selected{border-color:#168656;box-shadow:0 0 0 2px #18895625}
+.vehicle button{align-self:flex-start}.vehicle-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:4px}.vehicle-detail{padding:10px 12px;background:#fff;border:1px solid #e0ebe4;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}.vehicle-detail strong{display:block;color:#3c6654;font-size:12px}.vehicle-detail span{display:block;font-size:14px}.vehicle-media{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.vehicle-media img{height:95px;max-width:145px;object-fit:contain;border-radius:8px}.vehicle-media a{color:#086b48;font-weight:650;font-size:13px}@media(max-width:650px){.vehicle-details{grid-template-columns:1fr}}/* AWM: miniaturka pojazdu po lewej stronie karty zgody. */
+.vehicle-head{display:grid;grid-template-columns:148px minmax(0,1fr);gap:14px;align-items:center}
+.vehicle-head-info{min-width:0;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.vehicle-thumb{width:148px;height:112px;padding:0;border:1px solid #d7e5dc;border-radius:10px;background:linear-gradient(135deg,#e7f3eb,#d5e7df);overflow:hidden;display:flex;align-items:center;justify-content:center;color:#577769;font-size:39px}
+button.vehicle-thumb{cursor:zoom-in}
+.vehicle-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.vehicle-thumb:focus-visible{outline:3px solid #0a8558;outline-offset:2px}
+.awm-gallery[hidden]{display:none!important}
+.awm-gallery{position:fixed;inset:0;z-index:5000;background:rgba(4,20,13,.92);display:flex;align-items:center;justify-content:center;padding:60px 58px}
+.awm-gallery img{max-width:100%;max-height:calc(100dvh - 120px);object-fit:contain;border-radius:8px}
+.awm-gallery button{position:absolute;margin:0;width:42px;height:42px;display:grid;place-items:center;padding:0;border:1px solid #ffffff77;border-radius:50%;background:#133b2e;color:#fff;font-size:25px;cursor:pointer}
+.awm-gallery .awm-gallery-close{right:16px;top:14px}
+.awm-gallery .awm-gallery-prev{left:12px;top:50%;transform:translateY(-50%)}
+.awm-gallery .awm-gallery-next{right:12px;top:50%;transform:translateY(-50%)}
+.awm-gallery .awm-gallery-count{position:absolute;bottom:15px;color:#fff;font-weight:700}
+@media(max-width:540px){.vehicle-head{grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:start}.vehicle-thumb{width:110px;height:90px}.vehicle-head-info{gap:5px}.awm-gallery{padding:60px 45px}}
+.vehicle.selected{border-color:#168656;box-shadow:0 0 0 2px #18895625}
 #pinPanel[hidden],#result[hidden]{display:none}#pinPanel{border:2px solid #158653;background:#fbfffc}
 .pin-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;max-width:470px}
 #pin{letter-spacing:5px;font-size:22px;max-width:230px}#result .item{padding:10px 0;border-bottom:1px solid #d8e4de;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -65,6 +81,31 @@ fetch('/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.jso
 $('exit').addEventListener('click',async()=>{const r=await fetch('/api/logout',{method:'POST',credentials:'same-origin'});if(!r.ok)throw Error('Błąd wylogowania');location.replace('/warsztat')});
 function put(parent,key,val){const d=document.createElement('div');d.className='item';const b=document.createElement('strong');b.textContent=key+': ';d.appendChild(b);const t=document.createElement('span');t.textContent=typeof val==='object'?JSON.stringify(val,null,2):String(val??'');d.appendChild(t);parent.appendChild(d)}
 let cases=[];
+let awmGalleryReturnFocus=null;
+function openVehicleGallery(urls,start,trigger){
+ if(!urls.length)return;
+ let index=Math.max(0,Math.min(start||0,urls.length-1));
+ let overlay=document.getElementById('awmVehicleGallery');
+ if(!overlay){
+  overlay=document.createElement('div');overlay.id='awmVehicleGallery';overlay.className='awm-gallery';overlay.hidden=true;
+  overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Zdjęcia pojazdu');
+  overlay.innerHTML='<button type="button" class="awm-gallery-close" aria-label="Zamknij">×</button><button type="button" class="awm-gallery-prev" aria-label="Poprzednie zdjęcie">‹</button><img alt="Powiększone zdjęcie pojazdu"><button type="button" class="awm-gallery-next" aria-label="Następne zdjęcie">›</button><span class="awm-gallery-count"></span>';
+  document.body.appendChild(overlay);
+ }
+ awmGalleryReturnFocus=trigger||document.activeElement;
+ const image=overlay.querySelector('img'),counter=overlay.querySelector('.awm-gallery-count');
+ const show=()=>{image.src=urls[index];counter.textContent=(index+1)+' / '+urls.length};
+ const close=()=>{overlay.hidden=true;image.removeAttribute('src');document.removeEventListener('keydown',keys);if(awmGalleryReturnFocus&&awmGalleryReturnFocus.isConnected)awmGalleryReturnFocus.focus()};
+ const keys=ev=>{if(ev.key==='Escape')close();else if(ev.key==='ArrowLeft'){index=(index-1+urls.length)%urls.length;show()}else if(ev.key==='ArrowRight'){index=(index+1)%urls.length;show()}};
+ overlay.querySelector('.awm-gallery-close').onclick=close;
+ overlay.querySelector('.awm-gallery-prev').onclick=()=>{index=(index-1+urls.length)%urls.length;show()};
+ overlay.querySelector('.awm-gallery-next').onclick=()=>{index=(index+1)%urls.length;show()};
+ overlay.querySelector('.awm-gallery-prev').hidden=urls.length<2;
+ overlay.querySelector('.awm-gallery-next').hidden=urls.length<2;
+ overlay.onclick=ev=>{if(ev.target===overlay)close()};
+ overlay.hidden=false;show();document.addEventListener('keydown',keys);
+ overlay.querySelector('.awm-gallery-close').focus();
+}
 function render(){
  const list=$('vehicles');list.replaceChildren();
  const filtered=cases;
@@ -72,9 +113,27 @@ function render(){
  for(const c of filtered){
   const car=c.vehicle||{},status=(Array.isArray(c.stages)?c.stages.at(-1)?.name:'')||'Przyjęty do warsztatu';
   const item=document.createElement('article');item.className='vehicle';item.dataset.id=String(c.id);
-  const h=document.createElement('h3');h.textContent=[car.marka,car.model].filter(Boolean).join(' ')||'Pojazd';item.appendChild(h);
-  const meta=document.createElement('span');meta.className='meta';meta.textContent='Rejestracja: '+(car.rejestracja||'—')+(c.repair_no?'  •  Zlecenie: '+c.repair_no:'');item.appendChild(meta);
-  const st=document.createElement('span');st.className='status';st.textContent='● '+status;item.appendChild(st);
+  const header=document.createElement('div');header.className='vehicle-head';
+  const info=document.createElement('div');info.className='vehicle-head-info';
+  const h=document.createElement('h3');h.textContent=[car.marka,car.model].filter(Boolean).join(' ')||'Pojazd';info.appendChild(h);
+  const meta=document.createElement('span');meta.className='meta';meta.textContent='Rejestracja: '+(car.rejestracja||'—')+(c.repair_no?'  •  Zlecenie: '+c.repair_no:'');info.appendChild(meta);
+  const st=document.createElement('span');st.className='status';st.textContent='● '+status;info.appendChild(st);
+  const base='/api/warsztat/cases/'+encodeURIComponent(c.id);
+  const photos=[];
+  if(c.has_photo)photos.push(base+'/photo');
+  for(const a of (Array.isArray(c.attachments)?c.attachments:[])){
+   if(!a||!a.id)continue;
+   const kind=String(a.kind||'').toLowerCase(),name=String(a.name||'');
+   if(['vehicle_photo','photo','defect_photo','damage_photo','image'].includes(kind)||(/\\.(?:jpe?g|png|webp|gif)$/i.test(name)&&kind!=='report'))
+    photos.push(base+'/attachments/'+encodeURIComponent(a.id));
+  }
+  const thumb=document.createElement(photos.length?'button':'div');
+  thumb.className='vehicle-thumb';if(photos.length){thumb.type='button';thumb.setAttribute('aria-label','Powiększ zdjęcie pojazdu');
+   const img=document.createElement('img');img.alt='Miniaturka pojazdu';img.loading='lazy';img.src=photos[0];
+   img.onerror=()=>{img.remove();thumb.textContent='🚘';thumb.setAttribute('aria-label','Zdjęcie chwilowo niedostępne')};
+   thumb.appendChild(img);thumb.onclick=()=>openVehicleGallery(photos,0,thumb);
+  }else{thumb.textContent='🚘';thumb.setAttribute('aria-label','Brak zdjęcia pojazdu')}
+  header.appendChild(thumb);header.appendChild(info);item.appendChild(header);
   // Full authorized repair summary is always visible inside the vehicle card.
   const sec=c.sections||{};
   const details=document.createElement('div');details.className='vehicle-details';
@@ -98,11 +157,6 @@ function render(){
   if(sec.terminy)add('Terminy',sec.terminy);
   item.appendChild(details);
   const media=document.createElement('div');media.className='vehicle-media';
-  if(c.has_photo){
-   const img=document.createElement('img');img.alt='Zdjęcie pojazdu';
-   img.src='/api/warsztat/cases/'+encodeURIComponent(c.id)+'/photo';img.loading='lazy';
-   media.appendChild(img);
-  }
   for(const a of (Array.isArray(c.attachments)?c.attachments:[])){
    if(!a||!a.id)continue;
    const link=document.createElement('a');
