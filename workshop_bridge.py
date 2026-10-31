@@ -191,9 +191,18 @@ def install(app):
                 vehicle=r.get('vehicle') or {}
                 if role=='workshop_guest':
                     vehicle={k:vehicle.get(k,'') for k in ('marka','model','rejestracja')}
+                sec=r.get('sections') or {}
+                if not isinstance(sec,dict):sec={}
+                # Only public repair details; never expose internal notes or access lists.
+                visible={k:sec[k] for k in ('usterka','diagnoza','zakres','czesci','koszty','terminy')
+                         if k in sec}
+                files=sec.get('_awm_attachments') or []
+                attachments=[{'id':a.get('id'),'kind':a.get('kind'),'name':a.get('name')}
+                             for a in files if isinstance(a,dict) and a.get('id')]
                 result.append({'id':r['id'],'repair_no':r.get('repair_no'),'label':r.get('label'),
                                'repair_title':r.get('repair_title'),'vehicle':vehicle,
-                               'stages':r.get('stages') or [],'has_photo':bool(r.get('photo_path')),
+                               'stages':r.get('stages') or [],'sections':visible,'attachments':attachments,
+                               'has_photo':bool(r.get('photo_path')),
                                'updated_at':r.get('updated_at'), 'approval':approval_public(r)})
             return jsonify(ok=True,cases=result)
         except Exception:
