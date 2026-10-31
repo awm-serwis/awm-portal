@@ -76,7 +76,9 @@ function render(){
   const h=document.createElement('h3');h.textContent=[car.marka,car.model].filter(Boolean).join(' ')||'Pojazd';item.appendChild(h);
   const meta=document.createElement('span');meta.className='meta';meta.textContent='Rejestracja: '+(car.rejestracja||'—')+(c.repair_no?'  •  Zlecenie: '+c.repair_no:'');item.appendChild(meta);
   const st=document.createElement('span');st.className='status';st.textContent='● '+status;item.appendChild(st);
-  const btn=document.createElement('button');btn.type='button';btn.textContent='OTWÓRZ KARTĘ';btn.addEventListener('click',()=>openCase(c,btn));item.appendChild(btn);
+  item.tabIndex=0;item.setAttribute('role','button');item.setAttribute('aria-label','Szczegóły pojazdu');item.style.cursor='pointer';
+  item.addEventListener('click',event=>{if(event.target.closest('button,input,label,a'))return;openCase(c,item)});
+  item.addEventListener('keydown',event=>{if(event.target!==item)return;if(event.key==='Enter'||event.key===' '){event.preventDefault();openCase(c,item)}});
   const consent=c.approval||{};
   if(status==='Oczekiwanie na zgodę klienta'&&consent.status==='pending'){
    const consentBox=document.createElement('div');
@@ -112,7 +114,7 @@ function render(){
 async function load(){
  try{const r=await fetch('/api/warsztat/cases',{credentials:'same-origin',cache:'no-store'});const x=await r.json();
  if(!r.ok||!x.ok||!Array.isArray(x.cases))throw Error(x.error||'Nie udało się pobrać listy');
- cases=x.cases;render();const requested=new URLSearchParams(location.search).get('case');const found=cases.find(c=>c.id===requested);if(found){const btn=[...document.querySelectorAll(".vehicle")].find(n=>n.dataset.id===requested)?.querySelector("button");if(btn)openCase(found,btn)}
+ cases=x.cases;render();const requested=new URLSearchParams(location.search).get('case');const found=cases.find(c=>c.id===requested);if(found){const card=[...document.querySelectorAll(".vehicle")].find(n=>n.dataset.id===requested);if(card)openCase(found,card)}
  }catch(e){$('vehicles').replaceChildren();$('listError').textContent=e.message||'Brak połączenia'}
 }
 $('filter').addEventListener('input',render);load();
