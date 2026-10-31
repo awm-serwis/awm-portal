@@ -32,7 +32,7 @@ GUEST_HTML = """<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f1f7f4;color:#153b2b;font:15px/1.5 Segoe UI,Arial,sans-serif}
 header{background:#004c37;color:#fff;padding:20px 5vw;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
-header strong{font-size:26px}header small{display:block;color:#d4ece0;font-size:13px}
+header strong{font-size:26px}header small{display:block;color:#d4ece0;font-size:13px}.awm-account{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.awm-account-info{text-align:right}.awm-account-info span{font-size:15px;font-weight:500}.awm-account-info strong{font-size:16px;color:#fff}.awm-account-info small{font-size:12px}@media(max-width:580px){.awm-account{width:100%;justify-content:space-between}.awm-account-info{text-align:left}}
 main{max-width:1130px;margin:24px auto;padding:0 18px 30px}
 .panel{background:#fff;border:1px solid #d4e5da;border-radius:13px;padding:22px;margin-bottom:16px;box-shadow:0 4px 17px #0639230b}
 h1{font-size:24px;margin:0 0 8px}h2{font-size:19px;margin:0 0 14px}
@@ -53,7 +53,7 @@ label{display:block;margin:9px 0 5px;font-weight:700}
 #photo{max-width:min(100%,520px);max-height:340px;object-fit:contain;border-radius:9px}
 @media(max-width:540px){.pin-grid{grid-template-columns:1fr}#pin{max-width:100%}main{padding:0 12px}}
 </style></head><body>
-<header><div><strong>AWM WARSZTAT</strong><small>Lista pojazdów i aktualne etapy naprawy</small></div><button id="exit" type="button" style="background:#a52e39">WYLOGUJ</button></header>
+<header><div><strong>AWM WARSZTAT</strong><small>Lista pojazdów i aktualne etapy naprawy</small></div><div class="awm-account"><div class="awm-account-info"><span>Witaj, <strong id="awmWelcomeName">Użytkowniku</strong></span><small>Panel klienta Warsztatu</small></div><button id="exit" type="button" style="background:#a52e39">WYLOGUJ</button></div></header>
 <main><section class="panel" aria-label="Twoje pojazdy">
 <div id="vehicles" aria-live="polite"><p class="muted">Ładowanie pojazdów…</p></div>
 <p id="listError" class="error" role="alert"></p></section>
@@ -61,6 +61,7 @@ label{display:block;margin:9px 0 5px;font-weight:700}
 __RODO_NOTICE__
 <script>
 const $=id=>document.getElementById(id);
+fetch('/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(x=>{const n=x?.user?.login;if(n)$('awmWelcomeName').textContent=String(n)}).catch(()=>{});
 $('exit').addEventListener('click',async()=>{const r=await fetch('/api/logout',{method:'POST',credentials:'same-origin'});if(!r.ok)throw Error('Błąd wylogowania');location.replace('/warsztat')});
 function put(parent,key,val){const d=document.createElement('div');d.className='item';const b=document.createElement('strong');b.textContent=key+': ';d.appendChild(b);const t=document.createElement('span');t.textContent=typeof val==='object'?JSON.stringify(val,null,2):String(val??'');d.appendChild(t);parent.appendChild(d)}
 let cases=[];
