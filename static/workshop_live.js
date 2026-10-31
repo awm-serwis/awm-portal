@@ -14,42 +14,17 @@
  rows.forEach(c=>c.remove());if(details){details.hidden=true;}
  const list=document.createElement('div');list.id='awmLiveList';root.querySelector('.awm-workshop-search').insertAdjacentElement('afterend',list);
  const banner=root.querySelector('.preview-head .tag');if(banner)banner.textContent='ZLECENIA Z PROGRAMU AWM';
- const hint=root.querySelector('.demo-note');if(hint)hint.textContent='Zlecenia z programu AWM. Po kliknięciu PIN wyświetlą się szczegóły wybranego pojazdu.';
+ const hint=root.querySelector('.demo-note');if(hint)hint.textContent='Zlecenia z programu AWM. Kliknij pojazd, aby otworzyć kartę bez dodatkowego PIN-u.';
  const cases=Array.isArray(data.cases)?data.cases:[];
  if(!cases.length){list.innerHTML='<div class="panel">Brak opublikowanych zleceń. W programie AWM WARSZTAT wybierz WYŚLIJ NA PORTAL.</div>';return}
- const modal=document.createElement('dialog');modal.className='awm-vehicle-pin-modal';modal.style.cssText='border:0;border-radius:14px;padding:0;width:min(420px,94vw);max-width:94vw;box-shadow:0 20px 70px #001b1380';
- modal.innerHTML='<div class="panel" style="width:min(420px,94vw)"><h2>PIN pojazdu</h2><p>Wpisz PIN nadany w programie AWM (1–8 cyfr).</p><input type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="PIN pojazdu" style="font-size:22px;letter-spacing:6px;text-align:center"><p role="alert" class="error"></p><button type="button" class="btn accept">Otwórz kartę</button> <button type="button" class="btn cancel" style="background:#607c70">Anuluj</button></div>';
- document.body.appendChild(modal);let selected=null;
- modal.addEventListener('cancel',e=>{e.preventDefault();closeModal()});
- modal.querySelector('.cancel').onclick=()=>closeModal();
- function closeModal(){if(modal.open)modal.close();modal.querySelector('input').value='';}
- modal.querySelector('.accept').onclick=async()=>{
-  const input=modal.querySelector('input'),alert=modal.querySelector('[role=alert]');
-  alert.textContent='Sprawdzanie…';
-  const button=modal.querySelector('.accept');
-  if(button.disabled)return;
-  if(!selected){alert.textContent='Najpierw wybierz pojazd.';return;}
-  const chosen=selected;
-  button.disabled=true;
-  try{
-   const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(chosen.id)+'/unlock',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:input.value})});
-   const x=await r.json().catch(()=>({}));
-   if(!r.ok||!x.ok)throw Error(x.error||'Nie udało się zweryfikować PIN-u ('+r.status+').');
-   alert.textContent='Otwieranie karty…';
-   await open(chosen);
-   closeModal();
-  }catch(e){alert.textContent=e.message||'Nie udało się otworzyć karty pojazdu.';}
-  finally{button.disabled=false;}
- };
- modal.querySelector('input').onkeydown=e=>{if(e.key==='Enter')modal.querySelector('.accept').click();if(e.key==='Escape')closeModal()};
  const selectedHead=root.querySelector('.preview-head h1');
  const originalTitle=selectedHead.textContent;
  let current=null;
  function card(v){const p=v.vehicle||{};const name=[p.marka,p.model].filter(Boolean).join(' ')||v.label||'Pojazd';
   const div=document.createElement('article');div.className='vehicle-card';div.dataset.needle=[name,p.vin,p.rejestracja,v.repair_no,v.repair_title].join(' ').toLowerCase();
   const status=(Array.isArray(v.stages)?v.stages:[]).at(-1)?.name||'Przyjęty do warsztatu';
-  div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie po PIN</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div><div class="side"><button class="awm-open-repair" type="button">🔒 PIN</button></div>';
-  div.querySelector('button').onclick=(event)=>{event.preventDefault();event.stopPropagation();selected=v;modal.querySelector('[role=alert]').textContent='';modal.querySelector('input').value='';if(!modal.open)modal.showModal();modal.querySelector('input').focus()};
+  div.innerHTML='<div class="car-photo"><span>🚘</span><small>Zdjęcie w karcie</small></div><div class="vehicle-info"><h2>'+escape(name)+'</h2><div class="awm-fields"><div><small>Rejestracja</small><strong>'+escape(p.rejestracja||'—')+'</strong></div><div><small>Status</small><strong class="awm-status">'+escape(status)+'</strong></div></div></div><div class="side"><button class="awm-open-repair" type="button">OTWÓRZ KARTĘ</button></div>';
+  div.querySelector('button').onclick=async(event)=>{event.preventDefault();event.stopPropagation();const btn=event.currentTarget;btn.disabled=true;try{await open(v)}catch(e){alert(e.message||'Nie można otworzyć karty')}finally{btn.disabled=false}};
   return div;}
  const nodes=cases.map(card);nodes.forEach(n=>list.appendChild(n));
  search.oninput=()=>{let s=search.value.toLowerCase().trim();nodes.forEach(n=>n.hidden=!n.dataset.needle.includes(s))};
