@@ -54,28 +54,17 @@ label{display:block;margin:9px 0 5px;font-weight:700}
 @media(max-width:540px){.pin-grid{grid-template-columns:1fr}#pin{max-width:100%}main{padding:0 12px}}
 </style></head><body>
 <header><div><strong>AWM WARSZTAT</strong><small>Lista pojazdów i aktualne etapy naprawy</small></div><button id="exit" type="button" style="background:#a52e39">WYLOGUJ</button></header>
-<main><section class="panel"><h1>Lista pojazdów</h1><p class="muted">Widoczne są tylko podstawowe informacje i status naprawy. Aby otworzyć szczegóły, kliknij PIN przy wybranym pojeździe.</p>
+<main><section class="panel"><h1>Lista pojazdów</h1><p class="muted">Widzisz wyłącznie pojazdy przypisane do Twojego loginu. Kliknij kartę, aby zobaczyć szczegóły bez PIN-u.</p>
 <label for="filter">Wyszukaj pojazd</label><input id="filter" type="search" placeholder="Marka, model, rejestracja, numer zlecenia lub status">
 <div id="vehicles" aria-live="polite"><p class="muted">Ładowanie listy pojazdów…</p></div>
 <p id="listError" class="error" role="alert"></p></section>
-<section id="pinPanel" class="panel" hidden><h2 id="pinTitle">Otwórz zlecenie</h2><p class="muted">Wprowadź PIN przypisany do wybranego pojazdu w programie AWM (nowe PIN-y: 4 cyfry).</p>
-<form id="lookup"><input id="case" type="hidden"><div class="pin-grid"><div><label for="pin">PIN pojazdu</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" required autocomplete="off" placeholder="4 cyfry"></div>
-<button id="unlock" type="submit">OTWÓRZ KARTĘ</button></div></form><p id="msg" class="error" role="alert"></p></section>
 <section id="result" class="panel" hidden><h2 id="title">Szczegóły zlecenia</h2><div id="details"></div><img id="photo" alt="Zdjęcie pojazdu" hidden></section></main>
 __RODO_NOTICE__
 <script>
 const $=id=>document.getElementById(id);
-$('exit').addEventListener('click',async()=>{await fetch('/api/logout',{method:'POST'});location.replace('/warsztat')});
+$('exit').addEventListener('click',async()=>{const r=await fetch('/api/logout',{method:'POST',credentials:'same-origin'});if(!r.ok)throw Error('Błąd wylogowania');location.replace('/warsztat')});
 function put(parent,key,val){const d=document.createElement('div');d.className='item';const b=document.createElement('strong');b.textContent=key+': ';d.appendChild(b);const t=document.createElement('span');t.textContent=typeof val==='object'?JSON.stringify(val,null,2):String(val??'');d.appendChild(t);parent.appendChild(d)}
 let cases=[];
-function choose(c){
- $('case').value=c.id;
- const car=c.vehicle||{};
- $('pinTitle').textContent='PIN — '+([car.marka,car.model].filter(Boolean).join(' ')||'Pojazd');
- $('pin').value='';$('msg').textContent='';$('result').hidden=true;$('pinPanel').hidden=false;
- for(const n of document.querySelectorAll('.vehicle'))n.classList.toggle('selected',n.dataset.id===String(c.id));
- $('pinPanel').scrollIntoView({behavior:'smooth',block:'center'});$('pin').focus();
-}
 function render(){
  const needle=$('filter').value.toLocaleLowerCase('pl').trim(),list=$('vehicles');list.replaceChildren();
  const filtered=cases.filter(c=>{const car=c.vehicle||{};const status=Array.isArray(c.stages)?c.stages.at(-1)?.name||'':'';
@@ -87,38 +76,35 @@ function render(){
   const h=document.createElement('h3');h.textContent=[car.marka,car.model].filter(Boolean).join(' ')||'Pojazd';item.appendChild(h);
   const meta=document.createElement('span');meta.className='meta';meta.textContent='Rejestracja: '+(car.rejestracja||'—')+(c.repair_no?'  •  Zlecenie: '+c.repair_no:'');item.appendChild(meta);
   const st=document.createElement('span');st.className='status';st.textContent='● '+status;item.appendChild(st);
-  const btn=document.createElement('button');btn.type='button';btn.textContent='🔒 PIN — SZCZEGÓŁY';btn.addEventListener('click',()=>choose(c));item.appendChild(btn);
+  const btn=document.createElement('button');btn.type='button';btn.textContent='OTWÓRZ KARTĘ';btn.addEventListener('click',()=>openCase(c,btn));item.appendChild(btn);
   list.appendChild(item);
  }
 }
 async function load(){
  try{const r=await fetch('/api/warsztat/cases',{credentials:'same-origin',cache:'no-store'});const x=await r.json();
  if(!r.ok||!x.ok||!Array.isArray(x.cases))throw Error(x.error||'Nie udało się pobrać listy');
- cases=x.cases;render();const requested=new URLSearchParams(location.search).get('case');const found=cases.find(c=>c.id===requested);if(found)choose(found)
+ cases=x.cases;render();const requested=new URLSearchParams(location.search).get('case');const found=cases.find(c=>c.id===requested);if(found){const btn=[...document.querySelectorAll(".vehicle")].find(n=>n.dataset.id===requested)?.querySelector("button");if(btn)openCase(found,btn)}
  }catch(e){$('vehicles').replaceChildren();$('listError').textContent=e.message||'Brak połączenia'}
 }
 $('filter').addEventListener('input',render);load();
-$('lookup').addEventListener('submit',async e=>{
- e.preventDefault();const id=$('case').value,pin=$('pin').value,msg=$('msg'),box=$('result'),button=$('unlock');
- box.hidden=true;msg.textContent='';
- if(!/^[0-9]{4,8}$/.test(pin)){msg.textContent='Wpisz PIN składający się z 4–8 cyfr.';return}
- if(!/^[0-9a-fA-F-]{36}$/.test(id)){msg.textContent='Wybierz pojazd z listy';return}
+async function openCase(c,button){
+ const id=c.id,box=$('result');box.hidden=true;$('listError').textContent='';
  button.disabled=true;
  try{
   const path='/api/warsztat/cases/'+encodeURIComponent(id);
-  let r=await fetch(path+'/unlock',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});let x=await r.json();
-  if(!r.ok)throw Error(x.error||'Nieprawidłowy PIN');
-  r=await fetch(path,{credentials:'same-origin'});x=await r.json();
-  if(!r.ok)throw Error(x.error||'Nie można otworzyć zlecenia');
-  const c=x.case,target=$('details');target.replaceChildren();
-  $('title').textContent=c.label||c.repair_title||'Zlecenie';put(target,'Zlecenie',c.repair_no||id);
-  put(target,'Pojazd',c.vehicle||{});put(target,'Etapy',c.stages||[]);
-  for(const [k,v] of Object.entries(c.sections||{})){if(k!=='notatki')put(target,k,v)}
-  const photo=$('photo');photo.hidden=!c.has_photo;if(c.has_photo)photo.src=path+'/photo';
-  $('pin').value='';box.hidden=false;box.scrollIntoView({behavior:'smooth',block:'start'});
- }catch(ex){msg.textContent=ex.message||'Nie udało się otworzyć pojazdu'}
+  const r=await fetch(path,{credentials:'same-origin',cache:'no-store'}),x=await r.json();
+  if(!r.ok||!x.ok||!x.case)throw Error(x.error||'Nie masz dostępu do tego pojazdu');
+  const vehicle=x.case,target=$('details');target.replaceChildren();
+  $('title').textContent=vehicle.label||vehicle.repair_title||'Zlecenie';
+  put(target,'Zlecenie',vehicle.repair_no||id);
+  put(target,'Pojazd',vehicle.vehicle||{});put(target,'Etapy',vehicle.stages||[]);
+  for(const [k,v] of Object.entries(vehicle.sections||{})){if(k!=='notatki'&&!k.startsWith('_awm_'))put(target,k,v)}
+  const photo=$('photo');photo.hidden=!vehicle.has_photo;
+  if(vehicle.has_photo)photo.src=path+'/photo';
+  box.hidden=false;box.scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(ex){$('listError').textContent=ex.message||'Błąd odczytu pojazdu'}
  finally{button.disabled=false}
-});
+}
 </script></body></html>""".replace("__RODO_NOTICE__",RODO_NOTICE)
 
 def install_workshop_access(app):
@@ -270,7 +256,7 @@ def install_workshop_access(app):
                 login=str(x.get("login") or "").strip()
                 password=str(x.get("password") or "")
                 if not re.fullmatch(r"[A-Za-z0-9_.-]{3,60}",login):return jsonify(error="Login: 3–60 znaków, litery/cyfry/._-"),400
-                if not 10<=len(password)<=128:return jsonify(error="Hasło: 10–128 znaków"),400
+                if not 4<=len(password)<=128:return jsonify(error="Hasło: 4–128 znaków"),400
                 if login.casefold() in {u["login"].casefold() for u in all_users()}:
                     return jsonify(error="Login już istnieje"),409
                 role=str(x.get("role") or "workshop")
@@ -284,7 +270,7 @@ def install_workshop_access(app):
             action=x.get("action")
             if action=="password":
                 pw=str(x.get("password") or "")
-                if not 10<=len(pw)<=128:return jsonify(error="Hasło: 10–128 znaków"),400
+                if not 4<=len(pw)<=128:return jsonify(error="Hasło: 4–128 znaków"),400
                 modify(uid,{"pass":ph(pw)})
             elif action=="disable":
                 if target["role"] not in ("workshop","workshop_guest"):return jsonify(error="Już zablokowane"),409
