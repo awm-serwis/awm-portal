@@ -31,7 +31,7 @@ GUEST_HTML = """<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta
 <title>AWM Warsztat — statusy pojazdów</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f1f7f4;color:#153b2b;font:15px/1.5 Segoe UI,Arial,sans-serif}
-header{background:#004c37;color:#fff;padding:20px 5vw;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+header{background-color:#003827;background-image:linear-gradient(90deg,#00251d 0%,#003e2dda 36%,#003827cc 100%),url('/static/awm_warsztat_header_new.svg');background-position:center,right center;background-repeat:no-repeat;background-size:cover,auto 100%;color:#fff;min-height:120px;padding:18px 5vw;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;border-bottom:3px solid #13ab77}
 header strong{font-size:26px}header small{display:block;color:#d4ece0;font-size:13px}.awm-account{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.awm-account-info{text-align:right}.awm-account-info span{font-size:15px;font-weight:500}.awm-account-info strong{font-size:16px;color:#fff}.awm-account-info small{font-size:12px}@media(max-width:580px){.awm-account{width:100%;justify-content:space-between}.awm-account-info{text-align:left}}
 main{max-width:1130px;margin:24px auto;padding:0 18px 30px}
 .panel{background:#fff;border:1px solid #d4e5da;border-radius:13px;padding:22px;margin-bottom:16px;box-shadow:0 4px 17px #0639230b}
@@ -233,7 +233,33 @@ def install_workshop_access(app):
             return Response(GUEST_HTML,mimetype="text/html",headers={"Cache-Control":"no-store"})
         if role not in ("admin","workshop"):
             return Response(LOGIN_HTML.replace("</body>",RODO_NOTICE+"</body>"),mimetype="text/html",headers={"Cache-Control":"no-store"})
-        page=g["WORKSHOP_PAGE"].replace('href="/">← PRZEJDŹ DO PRZEGLĄDÓW', 'href="https://awm-portal-1.onrender.com/">← PRZEJDŹ DO PRZEGLĄDÓW').replace("</body>",RODO_NOTICE+'<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script><script src="/static/workshop_access.js?v=2"></script></body>')
+        extra_header = """
+<style>
+header.awm-workshop-header{background-color:#003827!important;background-image:linear-gradient(90deg,#00251dea,#003e2dd8),url('/static/awm_warsztat_header_new.svg')!important;background-repeat:no-repeat!important;background-position:center,right center!important;background-size:cover,auto 100%!important;border-bottom:3px solid #13ab77!important}
+header.awm-workshop-header::before{display:none!important}
+.awm-workshop-welcome{color:#f5fff9;font:600 15px 'Segoe UI',Arial,sans-serif;text-align:right;padding:8px 12px}
+.awm-workshop-welcome strong{color:#72efb7}
+@media(max-width:680px){.awm-workshop-welcome{font-size:13px;padding:5px}}
+</style>
+<script>
+(function(){
+  fetch('/api/me',{credentials:'same-origin',cache:'no-store'})
+   .then(r=>r.ok?r.json():null)
+   .then(x=>{
+    const name=x?.user?.login;
+    const top=document.querySelector('header.awm-workshop-header .topbuttons');
+    if(!name||!top)return;
+    const welcome=document.createElement('span');
+    welcome.className='awm-workshop-welcome';
+    welcome.appendChild(document.createTextNode('Witaj, '));
+    const strong=document.createElement('strong');strong.textContent=String(name);
+    welcome.appendChild(strong);
+    top.insertBefore(welcome,top.firstChild);
+   }).catch(()=>{});
+})();
+</script>
+"""
+        page=g["WORKSHOP_PAGE"].replace('href="/">← PRZEJDŹ DO PRZEGLĄDÓW', 'href="https://awm-portal-1.onrender.com/">← PRZEJDŹ DO PRZEGLĄDÓW').replace("</body>",RODO_NOTICE+extra_header+'<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script><script src="/static/workshop_access.js?v=2"></script></body>')
         return Response(page,mimetype="text/html",headers={"Cache-Control":"no-store"})
     @app.get("/warsztat/rodo")
     def workshop_rodo():
