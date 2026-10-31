@@ -220,7 +220,7 @@ def install_workshop_access(app):
                 allowed=allowed or path.startswith("/api/warsztat/")
             else:
                 # An external account may only open one case after its PIN is verified.
-                allowed=allowed or path=="/api/warsztat/cases" or bool(re.fullmatch(r"/api/warsztat/cases/[0-9a-fA-F-]{36}(?:/unlock|/photo)?",path))
+                allowed=allowed or path=="/api/warsztat/cases" or bool(re.fullmatch(r"/api/warsztat/cases/[0-9a-fA-F-]{36}(?:/unlock|/photo|/attachments/[0-9a-fA-F-]{36})?",path))
             if not allowed:
                 if path.startswith("/api/"):return jsonify(error="To konto nie ma dostępu do tego modułu"),403
                 return redirect("/warsztat",302)
