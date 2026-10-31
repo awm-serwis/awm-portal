@@ -101,6 +101,7 @@ async function openCase(c,button){
   for(const [k,v] of Object.entries(vehicle.sections||{})){if(k!=='notatki'&&!k.startsWith('_awm_'))put(target,k,v)}
   const photo=$('photo');photo.hidden=!vehicle.has_photo;
   if(vehicle.has_photo)photo.src=path+'/photo';
+  for(const a of (vehicle.attachments||[])){const d=document.createElement('div');const l=document.createElement('a');l.textContent='Załącznik: '+String(a.name||'plik');l.href=path+'/attachments/'+encodeURIComponent(a.id);l.target='_blank';l.rel='noopener noreferrer';d.appendChild(l);target.appendChild(d)}
   box.hidden=false;box.scrollIntoView({behavior:'smooth',block:'start'});
  }catch(ex){$('listError').textContent=ex.message||'Błąd odczytu pojazdu'}
  finally{button.disabled=false}
