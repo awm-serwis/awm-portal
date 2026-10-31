@@ -14,19 +14,19 @@ const top=elem('div',{class:'awm-access-row'},card);
 elem('h2',{text:'🔐 Panel dostępu — AWM Warsztat'},top);
 const close=elem('button',{type:'button',class:'awm-access-muted',text:'ZAMKNIJ'},top);
 close.addEventListener('click',()=>{modal.hidden=true});
-elem('p',{class:'awm-access-hint',text:'Administrator zarządza kontami Warsztatu. Konta zewnętrzne mogą zobaczyć tylko konkretne zlecenie po podaniu identyfikatora i PIN-u. Hasła nie są wyświetlane — można nadać nowe.'},card);
+elem('p',{class:'awm-access-hint',text:'Administrator zarządza kontami Warsztatu. Konta zewnętrzne widzą tylko pojazdy przypisane do swojego loginu, bez PIN-u. Hasła nie są wyświetlane — można nadać nowe.'},card);
 const form=elem('form',{class:'awm-access-create'},card);
 const lf=elem('div',{},form);
 elem('label',{for:'awmNewLogin',text:'Login pracownika'},lf);
 const login=elem('input',{id:'awmNewLogin',required:'',autocomplete:'off',placeholder:'np. mechanik01'},lf);
 const pf=elem('div',{},form);
-elem('label',{for:'awmNewPass',text:'Hasło (min. 10 znaków)'},pf);
-const pass=elem('input',{id:'awmNewPass',type:'password',required:'',autocomplete:'new-password',minlength:'10',placeholder:'Nowe hasło'},pf);
+elem('label',{for:'awmNewPass',text:'Hasło (min. 4 znaki)'},pf);
+const pass=elem('input',{id:'awmNewPass',type:'password',required:'',autocomplete:'new-password',minlength:'4',placeholder:'Nowe hasło'},pf);
 const rf=elem('div',{},form);
 elem('label',{for:'awmNewRole',text:'Zakres dostępu'},rf);
 const role=elem('select',{id:'awmNewRole'},rf);
 role.style.cssText='width:100%;border:1px solid #abcbbb;border-radius:8px;padding:10px;background:white';
-elem('option',{value:'workshop_guest',text:'OSOBA ZEWNĘTRZNA — zlecenie + PIN'},role);
+elem('option',{value:'workshop_guest',text:'OSOBA ZEWNĘTRZNA — przypisane pojazdy'},role);
 elem('option',{value:'workshop',text:'PRACOWNIK — lista zleceń'},role);
 elem('button',{type:'submit',text:'DODAJ KONTO'},form);
 const status=elem('p',{id:'awmAccessMessage',class:'awm-access-msg','aria-live':'polite'},card);
@@ -53,10 +53,10 @@ async function refresh(){
    try{await api('PATCH',{id:user.id,action:'delete',confirm_login:value});message('Usunięto konto: '+user.login);await refresh()}catch(e){message(e.message,true)}
   });
   const passrow=elem('div',{class:'awm-access-row'},entry);passrow.style.marginTop='10px';
-  const newPass=elem('input',{type:'password',autocomplete:'new-password',placeholder:'Nowe hasło (min. 10 znaków)'},passrow);
+  const newPass=elem('input',{type:'password',autocomplete:'new-password',placeholder:'Nowe hasło (min. 4 znaki)'},passrow);
   const save=elem('button',{type:'button',text:'ZMIEŃ HASŁO'},passrow);
   save.addEventListener('click',async()=>{
-   if(newPass.value.length<10){message('Hasło musi mieć minimum 10 znaków',true);return}
+   if(newPass.value.length<4){message('Hasło musi mieć minimum 4 znaki',true);return}
    try{await api('PATCH',{id:user.id,action:'password',password:newPass.value});newPass.value='';message('Hasło zostało zmienione: '+user.login)}catch(e){message(e.message,true)}
   });
  });
