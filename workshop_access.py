@@ -77,6 +77,35 @@ function render(){
   const meta=document.createElement('span');meta.className='meta';meta.textContent='Rejestracja: '+(car.rejestracja||'—')+(c.repair_no?'  •  Zlecenie: '+c.repair_no:'');item.appendChild(meta);
   const st=document.createElement('span');st.className='status';st.textContent='● '+status;item.appendChild(st);
   const btn=document.createElement('button');btn.type='button';btn.textContent='OTWÓRZ KARTĘ';btn.addEventListener('click',()=>openCase(c,btn));item.appendChild(btn);
+  const consent=c.approval||{};
+  if(status==='Oczekiwanie na zgodę klienta'&&consent.status==='pending'){
+   const consentBox=document.createElement('div');
+   consentBox.style.cssText='background:#eaf7ef;border:1px solid #add7be;border-radius:9px;padding:11px;margin-top:5px';
+   const heading=document.createElement('strong');heading.textContent='Zgoda na naprawę';consentBox.appendChild(heading);
+   const person=document.createElement('input');person.placeholder='Imię i nazwisko osoby udzielającej zgody';person.autocomplete='name';person.maxLength=100;person.style.marginTop='8px';consentBox.appendChild(person);
+   const checkRow=document.createElement('label');checkRow.style.cssText='display:flex;align-items:flex-start;gap:8px;font-weight:500';
+   const cb=document.createElement('input');cb.type='checkbox';cb.style.cssText='width:auto;margin-top:4px';checkRow.appendChild(cb);
+   const checkText=document.createElement('span');checkText.textContent='Potwierdzam, że udzielam zgody na naprawę wskazanego pojazdu.';checkRow.appendChild(checkText);consentBox.appendChild(checkRow);
+   const accept=document.createElement('button');accept.type='button';accept.textContent='✓ UDZIELAM ZGODY';consentBox.appendChild(accept);
+   const message=document.createElement('p');message.setAttribute('role','alert');message.className='error';consentBox.appendChild(message);
+   accept.onclick=async()=>{
+    const name=person.value.trim();
+    if(name.length<2||!cb.checked){message.textContent='Wpisz dane osoby i zaznacz potwierdzenie zgody.';return}
+    accept.disabled=true;message.textContent='';
+    try{
+     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/approval',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({person:name,confirm:true,request_id:consent.request_id})});
+     const response=await r.json();
+     if(!r.ok||!response.ok)throw Error(response.error||'Nie zapisano zgody');
+     c.approval=response.approval;render();
+    }catch(e){message.textContent=e.message||'Błąd zapisu zgody'}
+    finally{accept.disabled=false}
+   };
+   item.appendChild(consentBox);
+  }else if(consent.status==='approved'){
+   const approved=document.createElement('div');approved.style.cssText='color:#08713d;font-weight:700;font-size:13px';
+   approved.textContent='✓ Zgoda udzielona: '+(consent.person||'—')+' • '+(consent.decided_at?new Date(consent.decided_at).toLocaleString('pl-PL'):'—');
+   item.appendChild(approved);
+  }
   list.appendChild(item);
  }
 }
@@ -101,6 +130,7 @@ async function openCase(c,button){
   for(const [k,v] of Object.entries(vehicle.sections||{})){if(k!=='notatki'&&!k.startsWith('_awm_'))put(target,k,v)}
   const photo=$('photo');photo.hidden=!vehicle.has_photo;
   if(vehicle.has_photo)photo.src=path+'/photo';
+  for(const a of (vehicle.attachments||[])){const d=document.createElement('div');const l=document.createElement('a');l.textContent='Załącznik: '+String(a.name||'plik');l.href=path+'/attachments/'+encodeURIComponent(a.id);l.target='_blank';l.rel='noopener noreferrer';d.appendChild(l);target.appendChild(d)}
   box.hidden=false;box.scrollIntoView({behavior:'smooth',block:'start'});
  }catch(ex){$('listError').textContent=ex.message||'Błąd odczytu pojazdu'}
  finally{button.disabled=false}
@@ -219,7 +249,7 @@ def install_workshop_access(app):
                 allowed=allowed or path.startswith("/api/warsztat/")
             else:
                 # An external account may only open one case after its PIN is verified.
-                allowed=allowed or path=="/api/warsztat/cases" or bool(re.fullmatch(r"/api/warsztat/cases/[0-9a-fA-F-]{36}(?:/unlock|/photo)?",path))
+                allowed=allowed or path=="/api/warsztat/cases" or bool(re.fullmatch(r"/api/warsztat/cases/[0-9a-fA-F-]{36}(?:/unlock|/photo|/approval|/attachments/[0-9a-fA-F-]{36})?",path))
             if not allowed:
                 if path.startswith("/api/"):return jsonify(error="To konto nie ma dostępu do tego modułu"),403
                 return redirect("/warsztat",302)
