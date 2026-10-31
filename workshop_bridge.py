@@ -78,8 +78,15 @@ def install(app):
                 except (ValueError,TypeError):return err('Niepoprawny identyfikator prośby o zgodę',400)
             is_new=(not isinstance(approval,dict) or not approval.get('request_id')
                     or (requested_id and requested_id!=approval.get('request_id')))
-            if incoming_status=='Oczekiwanie na zgodę klienta' and (old_status!='Oczekiwanie na zgodę klienta' or is_new):
-                approval={'status':'pending','person':'','decided_at':'','request_id':requested_id or str(uuid.uuid4())}
+            if incoming_status=='Oczekiwanie na zgodę klienta':
+                if is_new:
+                    approval={'status':'pending','person':'','decided_at':'','request_id':requested_id or str(uuid.uuid4())}
+                elif approval.get('status')=='approved':
+                    # Desktop may still be waiting for its first refresh. Never undo
+                    # a consent already approved for the same request.
+                    stages.append({'name':'Zgoda na naprawę','since':approval.get('decided_at') or datetime.now(timezone.utc).isoformat()})
+                elif old_status not in ('Oczekiwanie na zgodę klienta','Zgoda na naprawę'):
+                    approval={'status':'pending','person':'','decided_at':'','request_id':requested_id or str(uuid.uuid4())}
             elif not isinstance(approval,dict):
                 approval={'status':'none','person':'','decided_at':'','request_id':''}
             data={'source':'AWM WARSZTAT','desktop_case_id':cid,
