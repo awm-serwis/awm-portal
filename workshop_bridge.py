@@ -1,4 +1,4 @@
-"""AWM R42 workshop bridge. Authenticated desktop publish; customer PIN verification."""
+"""AWM Warsztat: account-assigned repairs without vehicle PINs."""
 import base64, binascii, hashlib, hmac, io, os, secrets, time
 from datetime import datetime
 from flask import jsonify, request, session, send_file, Response
@@ -18,14 +18,27 @@ def install(app):
                 'repair_title':row.get('repair_title'),'vehicle':row.get('vehicle') or {},
                 'stages':row.get('stages') or [], 'updated_at':row.get('updated_at'),
                 'has_photo':bool(row.get('photo_path'))}
-    def verified(id):
-        token=session.get('awm_workshop_verified',{}).get(str(id))
-        if not token:return False
-        try:
-            rows=sb.table('awm_workshop_cases').select('pin_hash').eq('id',str(id)).limit(1).execute().data or []
-            stored=(rows[0].get('pin_hash') or '') if rows else ''
-            return bool(stored) and hmac.compare_digest(token,hashlib.sha256(stored.encode()).hexdigest())
-        except Exception:return False
+    _ACCESS_KEY='_awm_allowed_user_ids'
+    def access_ids(logins):
+        if not isinstance(logins,list) or not logins or len(logins)>100 or any(not isinstance(x,str) or not x.strip() for x in logins):
+            raise ValueError('Przypisz co najmniej jednego klienta do pojazdu')
+        names=[x.strip().casefold() for x in logins]
+        if len(set(names))!=len(names):raise ValueError('Powtórzony login klienta')
+        users=sb.table('users').select('id,login,role').execute().data or []
+        matches={u['login'].casefold():str(u['id']) for u in users if u.get('role')=='workshop_guest' and u.get('login')}
+        missing=set(names)-set(matches)
+        if missing:raise ValueError('Brak aktywnego konta: '+', '.join(sorted(missing)))
+        return [matches[n] for n in names]
+    def permitted(cid,record=None):
+        u=session.get('user')
+        if not isinstance(u,dict):return False
+        if u.get('role') in ('admin','workshop'):return True
+        if u.get('role')!='workshop_guest' or u.get('id') is None:return False
+        if record is None:
+            records=sb.table('awm_workshop_cases').select('sections').eq('id',str(cid)).limit(1).execute().data or []
+            record=records[0] if records else None
+        sec=(record or {}).get('sections') or {}
+        return isinstance(sec,dict) and str(u['id']) in [str(x) for x in sec.get(_ACCESS_KEY,[])]
     @app.post('/api/admin/workshop/cases')
     def awm_workshop_publish_r42():
         if not api():return err('Brak autoryzacji programu AWM',403)
@@ -40,18 +53,18 @@ def install(app):
         sec=x.get('sections') if isinstance(x.get('sections'),dict) else {}
         allowed=('usterka','diagnoza','zakres','czesci','koszty','terminy','zgody','notatki')
         sections={k:sec[k] for k in allowed if k in sec}
-        pin=x.get('pin_hash')
-        if pin is not None and (not isinstance(pin,str) or len(pin)>200 or ':' not in pin):return err('Nieprawidłowy skrót PIN',400)
+        try: recipients=access_ids(x.get('allowed_logins'))
+        except ValueError as e:return err(str(e),400)
+        except Exception:
+            app.logger.exception('Cannot check workshop access accounts')
+            return err('Nie udało się sprawdzić kont klientów',503)
         try:
             existing=sb.table('awm_workshop_cases').select('id,photo_path,pin_hash').eq('source','AWM WARSZTAT').eq('desktop_case_id',cid).limit(1).execute().data or []
             old=existing[0] if existing else None
             data={'source':'AWM WARSZTAT','desktop_case_id':cid,
                   'repair_no':clean_text(x.get('repair_no'),80),'label':clean_text(x.get('label'),220),
                   'repair_title':clean_text(x.get('repair_title'),200),
-                  'vehicle':vehicle,'stages':stages,'sections':sections,'updated_at':datetime.utcnow().isoformat()+'Z'}
-            if pin: data['pin_hash']=pin
-            if not pin and not old:return err('Ustaw PIN pojazdu w programie AWM przed publikacją',400)
-            if not pin and old and not old.get('pin_hash'):return err('Brak PIN pojazdu w programie AWM',400)
+                  'vehicle':vehicle,'stages':stages,'sections':dict(sections, **{_ACCESS_KEY:recipients}), 'updated_at':datetime.utcnow().isoformat()+'Z'}
             photo=x.get('photo')
             if isinstance(photo,dict) and photo.get('data_b64'):
                 try: raw=base64.b64decode(photo['data_b64'],validate=True)
@@ -86,74 +99,83 @@ def install(app):
         except Exception:return err('Nie udało się usunąć publikacji',503)
     @app.get('/api/warsztat/cases')
     def awm_workshop_list_r42():
-        role=(session.get('user') or {}).get('role')
-        if role not in ('admin','workshop','workshop_guest'):
-            return err('Wymagane zalogowane konto Warsztatu',403)
+        user=session.get('user')
+        role=user.get('role') if isinstance(user,dict) else None
+        if role not in ('admin','workshop','workshop_guest'):return err('Zaloguj się do Warsztatu',403)
         try:
-            rows=sb.table('awm_workshop_cases').select('id,repair_no,label,repair_title,vehicle,stages,updated_at,photo_path').order('updated_at',desc=True).limit(150).execute().data or []
-            if role=='workshop_guest':
-                # Guests can select a vehicle and see its repair status, but never
-                # receive VIN, customer data, costs, notes or photos before PIN.
-                cases=[]
-                for r in rows:
-                    vehicle=r.get('vehicle') or {}
-                    stages=[{'name':str(x.get('name',''))[:90]} for x in (r.get('stages') or []) if isinstance(x,dict)]
-                    cases.append({'id':r['id'], 'repair_no':r.get('repair_no'),
-                                  'vehicle':{k:vehicle.get(k,'') for k in ('marka','model','rejestracja')},
-                                  'stages':stages})
-                return jsonify(ok=True,cases=cases)
-            return jsonify(ok=True,cases=[public(r) for r in rows])
+            rows=sb.table('awm_workshop_cases').select('id,repair_no,label,repair_title,vehicle,stages,sections,updated_at,photo_path').order('updated_at',desc=True).limit(500).execute().data or []
+            if role=='workshop_guest':rows=[r for r in rows if permitted(r['id'],r)]
+            result=[]
+            for r in rows[:150]:
+                vehicle=r.get('vehicle') or {}
+                if role=='workshop_guest':
+                    vehicle={k:vehicle.get(k,'') for k in ('marka','model','rejestracja')}
+                result.append({'id':r['id'],'repair_no':r.get('repair_no'),'label':r.get('label'),
+                               'repair_title':r.get('repair_title'),'vehicle':vehicle,
+                               'stages':r.get('stages') or [],'has_photo':bool(r.get('photo_path')),
+                               'updated_at':r.get('updated_at')})
+            return jsonify(ok=True,cases=result)
         except Exception:
-            app.logger.exception('Warsztat vehicle list unavailable')
-            return err('Błąd odczytu zleceń',503)
+            app.logger.exception('Cannot verify workshop vehicle assignments')
+            return err('Nie można bezpiecznie odczytać listy pojazdów',503)
+
     @app.post('/api/warsztat/cases/<uuid:cid>/unlock')
     def awm_workshop_unlock_r42(cid):
-        cid=str(cid)
-        pin=str((request.get_json(silent=True) or {}).get('pin') or '')
-        # Per-case temporary lockout; legacy global counter is intentionally ignored.
-        now=int(time.time())
-        locks=session.get('awm_workshop_pin_locks',{})
-        if not isinstance(locks,dict):locks={}
-        locks={k:v for k,v in locks.items() if isinstance(v,dict) and int(v.get('until',0))>now}
-        state=locks.get(cid,{'count':0,'until':now+300})
-        if state.get('count',0)>=5:
-            session['awm_workshop_pin_locks']=locks
-            return err('Zbyt wiele prób. Spróbuj ponownie za kilka minut.',429)
-        if not pin.isascii() or not pin.isdigit() or not 1<=len(pin)<=8:return err('Nieprawidłowy PIN',403)
-        rows=sb.table('awm_workshop_cases').select('pin_hash').eq('id',cid).limit(1).execute().data or []
-        if not rows:return err('Nie znaleziono pojazdu',404)
-        stored=rows[0].get('pin_hash') or ''
+        return err('PIN został wyłączony. Otwórz przypisany pojazd po zalogowaniu.',410)
+
+    @app.route('/api/warsztat/access-cases',methods=['GET','POST'])
+    def workshop_case_accounts_r143():
+        key=os.getenv('AWM_API_KEY','AWM-CHANGE-ME')
+        supplied=request.headers.get('X-AWM-Key','')
+        desktop=bool(supplied) and key!='AWM-CHANGE-ME' and hmac.compare_digest(supplied,key)
+        user=session.get('user')
+        if not desktop and (not isinstance(user,dict) or user.get('role')!='admin'):
+            return err('Brak uprawnień administratora',403)
+        if request.method=='GET':
+            try:
+                sb.table('awm_workshop_cases').select('id,sections').limit(1).execute()
+                return jsonify(ok=True,feature='assigned_accounts_v1')
+            except Exception:return err('Baza Warsztatu niedostępna',503)
+        x=request.get_json(silent=True) or {}
+        cid=str(x.get('case_id') or '')
+        if not __import__('re').fullmatch(r'[0-9a-fA-F-]{36}',cid):return err('Nieprawidłowy ID',400)
+        try: ids=access_ids(x.get('logins'))
+        except ValueError as e:return err(str(e),400)
         try:
-            salt,digest=stored.split(':',1)
-            test=hashlib.pbkdf2_hmac('sha256',pin.encode(),bytes.fromhex(salt),200000).hex()
-            match=hmac.compare_digest(test,digest)
-        except Exception:match=False
-        if not match:
-            state['count']=int(state.get('count',0))+1
-            locks[cid]=state
-            session['awm_workshop_pin_locks']=locks
-            return err('Nieprawidłowy PIN' if state['count']<5 else 'Zbyt wiele prób. Spróbuj ponownie za kilka minut.',403 if state['count']<5 else 429)
-        locks.pop(cid,None)
-        session['awm_workshop_pin_locks']=locks
-        ids=session.get('awm_workshop_verified',{})
-        if not isinstance(ids,dict):ids={}
-        ids[cid]=hashlib.sha256(stored.encode()).hexdigest()
-        session['awm_workshop_verified']=dict(list(ids.items())[-30:])
-        return jsonify(ok=True)
+            rows=sb.table('awm_workshop_cases').select('id,sections').eq('id',cid).limit(1).execute().data or []
+            if not rows:return err('Nie znaleziono pojazdu',404)
+            sec=rows[0].get('sections') or {}
+            if not isinstance(sec,dict):sec={}
+            sec[_ACCESS_KEY]=ids
+            saved=sb.table('awm_workshop_cases').update({'sections':sec}).eq('id',cid).execute().data
+            if not saved:return err('Nie potwierdzono zapisania',503)
+            return jsonify(ok=True,feature='assigned_accounts_v1',case_id=cid,users=len(ids))
+        except Exception:
+            app.logger.exception('Assigning accounts failed')
+            return err('Nie udało się zapisać przypisania',503)
+
     @app.get('/api/warsztat/cases/<uuid:cid>')
     def awm_workshop_details_r42(cid):
         cid=str(cid)
-        if not verified(cid):return err('Wprowadź PIN pojazdu',403)
+        try:
+            if not permitted(cid):return err('Brak dostępu do tego pojazdu',403)
+        except Exception:
+            app.logger.exception('Case permission check failed')
+            return err('Nie można zweryfikować uprawnień',503)
         rows=sb.table('awm_workshop_cases').select('id,repair_no,label,repair_title,vehicle,stages,sections,updated_at,photo_path').eq('id',cid).limit(1).execute().data or []
         if not rows:return err('Nie znaleziono pojazdu',404)
         r=rows[0]
-        data=public(r);data['sections']=r.get('sections') or {}
-        if not admin():data['sections'].pop('notatki',None)
+        data=public(r)
+        data['sections']={k:v for k,v in (r.get('sections') or {}).items() if not k.startswith('_awm_') and (admin() or k!='notatki')}
         return jsonify(ok=True,case=data)
     @app.get('/api/warsztat/cases/<uuid:cid>/photo')
     def awm_workshop_photo_r42(cid):
         cid=str(cid)
-        if not verified(cid):return err('Wprowadź PIN pojazdu',403)
+        try:
+            if not permitted(cid):return err('Brak dostępu do tego pojazdu',403)
+        except Exception:
+            app.logger.exception('Case permission check failed')
+            return err('Nie można zweryfikować uprawnień',503)
         rows=sb.table('awm_workshop_cases').select('photo_path').eq('id',cid).limit(1).execute().data or []
         if not rows or not rows[0].get('photo_path'):return err('Brak zdjęcia',404)
         try:
