@@ -276,7 +276,7 @@ header.awm-workshop-header::before{display:none!important}
         if request.method=="GET":return jsonify(login=admins[0]["login"] if admins else "")
         x=request.get_json(silent=True) or {}
         login=str(x.get("login") or "").strip(); password=str(x.get("password") or "")
-        if not re.fullmatch(r"[A-Za-z0-9_.-]{3,60}",login) or not 6<=len(password)<=128:
+        if not re.fullmatch(r"[\w .-]{3,60}",login,flags=re.UNICODE) or not 4<=len(password)<=128:
             return jsonify(error="Nieprawidłowy login lub hasło"),400
         if admins:
             uid=admins[0]["id"]
@@ -346,7 +346,7 @@ header.awm-workshop-header::before{display:none!important}
             if request.method=="POST":
                 login=str(x.get("login") or "").strip()
                 password=str(x.get("password") or "")
-                if not re.fullmatch(r"[A-Za-z0-9_.-]{3,60}",login):return jsonify(error="Login: 3–60 znaków, litery/cyfry/._-"),400
+                if not re.fullmatch(r"[\w .-]{3,60}",login,flags=re.UNICODE):return jsonify(error="Login: 3–60 znaków, polskie litery, spacje, cyfry, kropka, myślnik, _"),400
                 if not 4<=len(password)<=128:return jsonify(error="Hasło: 4–128 znaków"),400
                 if login.casefold() in {u["login"].casefold() for u in all_users()}:
                     return jsonify(error="Login już istnieje"),409
