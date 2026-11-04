@@ -21,13 +21,13 @@ def create_request():
     if not isinstance(data, dict):
         return jsonify(error="Nieprawidłowe dane"), 400
     customer = str(data.get("customer") or "").strip()[:180]
-    registration = str(data.get("registration") or "").strip().upper()[:40]
+    registration = str(data.get("registration") or "").strip().upper()[:80]
     description = str(data.get("description") or "").strip()[:5000]
     email = str(data.get("email") or "").strip()[:254]
     if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         return jsonify(error="Nieprawidłowy adres e-mail"), 400
-    if not customer or not registration or not description:
-        return jsonify(error="Wymagane: klient, rejestracja, opis"), 400
+    if not registration or not description:
+        return jsonify(error="Wymagane: rej / marka i model oraz opis usterki"), 400
     now = datetime.now(timezone.utc).isoformat()
     ref = "AWM-" + secrets.token_hex(8).upper()
     try:
