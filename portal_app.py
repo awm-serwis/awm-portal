@@ -1317,6 +1317,10 @@ def awm_workshop_requests_redirect():
     return Response(status=302, headers={'Location': '/warsztat'})
 
 
+# R237 — niezależny moduł zgód klientów; nie zmienia istniejących tras Warsztatu.
+from r237_consents import bp as r237_consents_bp
+app.register_blueprint(r237_consents_bp)
+
 # AWM Mobile OTA — niezależne od aktualizacji AWM PRO.
 from mobile_updates import register_mobile_updates
 register_mobile_updates(app)
