@@ -2,6 +2,7 @@
 Przed wdrożeniem wymagane: trwały AWM_DATA_DIR, kopie zapasowe i testy integracji.
 """
 import hmac
+import re
 import os
 import secrets
 import sqlite3
@@ -22,9 +23,14 @@ def connection():
         id INTEGER PRIMARY KEY, invitation_token TEXT UNIQUE NOT NULL,
         order_id TEXT NOT NULL, registration TEXT NOT NULL,
         order_snapshot TEXT NOT NULL, customer_name TEXT,
-        authorization_number TEXT, consent_text TEXT,
+        authorization_number TEXT, copy_requested INTEGER DEFAULT 0, copy_email TEXT, consent_text TEXT,
         consent_utc TEXT, client_ip TEXT, user_agent TEXT
     )""")
+    columns = {row[1] for row in db.execute('PRAGMA table_info(repair_consents)')}
+    if 'copy_requested' not in columns:
+        db.execute('ALTER TABLE repair_consents ADD COLUMN copy_requested INTEGER DEFAULT 0')
+    if 'copy_email' not in columns:
+        db.execute('ALTER TABLE repair_consents ADD COLUMN copy_email TEXT')
     db.commit()
     return db
 
@@ -54,7 +60,7 @@ FORM = """<!doctype html><html lang="pl"><meta charset="utf-8">
 <style>body{font:16px system-ui;max-width:700px;margin:40px auto;padding:20px;color:#20312b}
 fieldset{border:1px solid #ccd7d1;border-radius:12px;padding:20px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-input[type=text]{box-sizing:border-box;width:100%;padding:12px}
+input[type=text],input[type=email]{box-sizing:border-box;width:100%;padding:12px}
 label{display:block;margin:12px 0}button{padding:12px 20px}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f4;padding:15px}
 @media(max-width:560px){.grid{grid-template-columns:1fr}}</style>
@@ -66,7 +72,10 @@ Pojazd: <strong>{{ registration }}</strong></p>
 <input type="text" name="customer_name" maxlength="180" required></label>
 <label>Nr autoryzacji (opcjonalny)
 <input type="text" name="authorization_number" maxlength="120"></label>
-</div><label><input type="checkbox" name="confirmed" value="yes" required>
+</div><label><input type="checkbox" name="send_copy" value="yes" onchange="document.getElementById('copyEmail').required=this.checked;document.getElementById('copyEmailRow').hidden=!this.checked"> Wyślij kopię potwierdzenia na mój e-mail</label>
+<label id="copyEmailRow" hidden>Adres e-mail do wysłania kopii
+<input id="copyEmail" type="email" name="copy_email" maxlength="254" autocomplete="email"></label>
+<label><input type="checkbox" name="confirmed" value="yes" required>
 Potwierdzam, że zapoznałem(-am) się z powyższym zakresem i udzielam zgody na naprawę wskazanego pojazdu.</label>
 <button type="submit">UDZIELAM ZGODY</button></fieldset></form></html>"""
 
@@ -84,20 +93,24 @@ def consent(token):
         number = request.form.get("authorization_number", "").strip()
         if not name or len(name) > 180 or len(number) > 120 or request.form.get("confirmed") != "yes":
             return "Nieprawidłowe dane zgody.", 400
+        copy_requested = request.form.get('send_copy') == 'yes'
+        copy_email = request.form.get('copy_email', '').strip() if copy_requested else ''
+        if copy_requested and (len(copy_email) > 254 or not re.fullmatch(r'[^\\s@]+@[^\\s@]+\\.[^\\s@]+', copy_email)):
+            return 'Podaj poprawny adres e-mail.', 400
         statement = "Potwierdzam, że zapoznałem(-am) się z powyższym zakresem i udzielam zgody na naprawę wskazanego pojazdu."
         cursor = db.execute("""UPDATE repair_consents SET customer_name=?, authorization_number=?,
-            consent_text=?, consent_utc=?, client_ip=?, user_agent=?
+            copy_requested=?, copy_email=?, consent_text=?, consent_utc=?, client_ip=?, user_agent=?
             WHERE invitation_token=? AND consent_utc IS NULL""",
-            (name, number, statement, datetime.now(timezone.utc).isoformat(),
+            (name, number, int(copy_requested), copy_email, statement, datetime.now(timezone.utc).isoformat(),
              request.remote_addr or "", request.user_agent.string[:500], token))
         if cursor.rowcount != 1: return "Zgoda została już zapisana.", 409
-    return "Zgoda na naprawę została zapisana. Dziękujemy.", 200
+    return ('Zgoda została zapisana. Prośba o kopię e-mail została odnotowana; wysyłka nie jest jeszcze skonfigurowana.' if copy_requested else 'Zgoda na naprawę została zapisana. Dziękujemy.'), 200
 
 @bp.get("/api/r237/consents")
 def list_consents():
     admin_only()
     with connection() as db:
         rows = db.execute("""SELECT id,order_id,registration,customer_name,authorization_number,
-            consent_utc,consent_text,order_snapshot FROM repair_consents
+            consent_utc,consent_text,order_snapshot,copy_requested,copy_email FROM repair_consents
             WHERE consent_utc IS NOT NULL ORDER BY id DESC LIMIT 500""").fetchall()
     return jsonify([dict(row) for row in rows])
