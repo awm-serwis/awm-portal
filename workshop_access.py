@@ -416,6 +416,7 @@ header.awm-workshop-header .topbuttons{background:linear-gradient(90deg,transpar
                 allowed=allowed or path.startswith("/api/warsztat/")
             else:
                 # An external account may only open one case after its PIN is verified.
+                allowed=allowed or (path=="/api/warsztat/r238/requests" and request.method=="POST")
                 allowed=allowed or path=="/api/warsztat/cases" or bool(re.fullmatch(r"/api/warsztat/cases/[0-9a-fA-F-]{36}(?:/unlock|/photo|/approval|/attachments/[0-9a-fA-F-]{36})?",path))
             if not allowed:
                 if path.startswith("/api/"):return jsonify(error="To konto nie ma dostępu do tego modułu"),403
