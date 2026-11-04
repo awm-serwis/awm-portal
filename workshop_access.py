@@ -274,6 +274,14 @@ GUEST_R238_HTML = r"""
 </script>
 """
 GUEST_HTML = GUEST_HTML.replace('<main><section class="panel"', '<main>' + GUEST_R238_HTML + '<section class="panel"', 1)
+# Also show the intake form on the logged-out workshop landing page.
+# The create endpoint accepts public submissions; request listing remains staff-only.
+LOGIN_HTML = LOGIN_HTML.replace(
+    "</main>",
+    GUEST_R238_HTML.replace('<section class="panel"', '<section class="card" style="margin-top:18px"') + "</main>",
+    1,
+)
+
 
 def install_workshop_access(app):
     original_home=app.view_functions["home"]
