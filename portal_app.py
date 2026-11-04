@@ -3,8 +3,10 @@ from pathlib import Path
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file, session, Response
 
+from r238_requests import bp as r238_requests_bp
 app = Flask(__name__)
 app.secret_key = os.getenv('AWM_SECRET_KEY', 'awm-portal-53-change-me')
+app.register_blueprint(r238_requests_bp)
 BASE = Path(__file__).resolve().parent
 DATA = Path(os.getenv('AWM_DATA_DIR', str(BASE / 'data')))
 FILES = DATA / 'files'
@@ -1210,7 +1212,7 @@ def awm_workshop_landing():
     user=session.get('user')
     if not user or user.get('role')!='admin':
         return Response('<!doctype html><html lang="pl"><meta charset="utf-8"><title>AWM WARSZTAT — dostęp chroniony</title><body style="font:16px Arial;padding:36px"><h2>AWM WARSZTAT — dostęp tylko dla zalogowanego warsztatu</h2><p>Zaloguj się na platformie jako administrator warsztatu.</p><a href="/">PRZEJDŹ DO LOGOWANIA</a></body></html>',status=403,mimetype='text/html')
-    return Response(WORKSHOP_PAGE.replace('</body>','<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script></body>'),mimetype='text/html')
+    return Response(WORKSHOP_PAGE.replace('</body>','<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script><script src="/static/r238_requests.js?v=1"></script></body>'),mimetype='text/html')
 
 @app.get('/warsztat/zapytania')
 def awm_workshop_requests_redirect():
