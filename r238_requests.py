@@ -1,7 +1,7 @@
 """R238 — isolated workshop intake and repair-stage workflow.
 Requires persistent AWM_DATA_DIR; no automatic import into desktop AWM PRO yet.
 """
-import os, sqlite3, secrets, hmac
+import os, sqlite3, secrets, hmac, re
 from pathlib import Path
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, session
@@ -35,6 +35,9 @@ def create_request():
     customer = str(data.get("customer") or "").strip()[:180]
     registration = str(data.get("registration") or "").strip().upper()[:40]
     description = str(data.get("description") or "").strip()[:5000]
+    email = str(data.get('email') or '').strip()[:254]
+    if email and not re.fullmatch(r'[^\\s@]+@[^\\s@]+\\.[^\\s@]+', email):
+        return jsonify(error='Nieprawidłowy adres e-mail'), 400
     if not customer or not registration or not description:
         return jsonify(error="Wymagane: klient, rejestracja, opis"), 400
     now = datetime.now(timezone.utc).isoformat()
@@ -43,7 +46,7 @@ def create_request():
         con.execute("""INSERT INTO workshop_requests
         (public_ref,created_utc,customer,email,phone,registration,vehicle,description,updated_utc)
         VALUES (?,?,?,?,?,?,?,?,?)""",
-        (ref,now,customer,str(data.get("email") or "")[:254],
+        (ref,now,customer,email,
          str(data.get("phone") or "")[:50],registration,
          str(data.get("vehicle") or "")[:200],description,now))
     return jsonify(ok=True, reference=ref, status="new"), 201
