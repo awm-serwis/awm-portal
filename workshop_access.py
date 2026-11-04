@@ -226,6 +226,55 @@ async function openCase(c,button){
 }
 </script></body></html>""".replace("__RODO_NOTICE__",RODO_NOTICE)
 
+# R238: the customer panel uses GUEST_HTML, not WORKSHOP_PAGE.
+# Show the intake tile on the customer's actual /warsztat page.
+GUEST_R238_HTML = r"""
+<section class="panel" id="awmR238Intake" aria-labelledby="awmR238Title">
+  <h2 id="awmR238Title">✉ Zgłoszenia do warsztatu</h2>
+  <p class="muted">Zgłoś usterkę lub poproś o kontakt. Zgłoszenie trafi do kolejki warsztatu.</p>
+  <button type="button" id="awmR238Open" aria-expanded="false" aria-controls="awmR238Form">✉ WYŚLIJ ZGŁOSZENIE</button>
+  <form id="awmR238Form" hidden style="margin-top:16px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      <label>Imię i nazwisko *<input name="customer" required maxlength="180" autocomplete="name"></label>
+      <label>Numer rejestracyjny *<input name="registration" required maxlength="40" autocomplete="off"></label>
+      <label>Telefon<input name="phone" maxlength="50" autocomplete="tel"></label>
+      <label>E-mail<input name="email" type="email" maxlength="254" autocomplete="email"></label>
+      <label>Pojazd<input name="vehicle" maxlength="200"></label>
+    </div>
+    <label>Opis usterki lub zgłoszenia *<textarea name="description" required maxlength="5000" style="display:block;width:100%;min-height:110px;padding:12px;border:1px solid #afcbbc;border-radius:8px;font:inherit"></textarea></label>
+    <button type="submit" id="awmR238Send">WYŚLIJ DO WARSZTATU</button>
+  </form>
+  <p id="awmR238Status" role="status" aria-live="polite" style="margin-bottom:0"></p>
+</section>
+<script>
+(function(){
+  const open=document.getElementById('awmR238Open'),form=document.getElementById('awmR238Form');
+  const status=document.getElementById('awmR238Status'),send=document.getElementById('awmR238Send');
+  open.addEventListener('click',function(){
+    form.hidden=!form.hidden;open.setAttribute('aria-expanded',String(!form.hidden));
+    if(!form.hidden)form.querySelector('input').focus();
+  });
+  form.addEventListener('submit',async function(ev){
+    ev.preventDefault();send.disabled=true;status.textContent='Zapisywanie zgłoszenia...';
+    try {
+      const data=Object.fromEntries(new FormData(form));
+      const response=await fetch('/api/warsztat/r238/requests',{
+        method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(data)
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok || !result.ok)throw new Error(result.error||'Nie udało się zapisać zgłoszenia');
+      status.textContent='Zgłoszenie zapisane. Numer: '+result.reference;
+      form.reset();form.hidden=true;open.setAttribute('aria-expanded','false');
+    } catch(error){status.textContent='Błąd: '+error.message}
+    finally {send.disabled=false}
+  });
+})();
+</script>
+"""
+GUEST_HTML = GUEST_HTML.replace('<main><section class="panel"', '<main>' + GUEST_R238_HTML + '<section class="panel"', 1)
+
 def install_workshop_access(app):
     original_home=app.view_functions["home"]
     original_login=app.view_functions["login"]
@@ -316,7 +365,7 @@ header.awm-workshop-header .topbuttons{background:linear-gradient(90deg,transpar
 })();
 </script>
 """
-        page=g["WORKSHOP_PAGE"].replace('href="/">← PRZEJDŹ DO PRZEGLĄDÓW', 'href="https://awm-portal-1.onrender.com/">← PRZEJDŹ DO PRZEGLĄDÓW').replace("</body>",RODO_NOTICE+extra_header+'<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script><script src="/static/workshop_access.js?v=2"></script></body>')
+        page=g["WORKSHOP_PAGE"].replace('href="/">← PRZEJDŹ DO PRZEGLĄDÓW', 'href="https://awm-portal-1.onrender.com/">← PRZEJDŹ DO PRZEGLĄDÓW').replace("</body>",RODO_NOTICE+extra_header+'<script src="/static/workshop_live.js?v=r51-single-vehicle-card"></script><script src="/static/workshop_access.js?v=2"></script><script src="/static/r238_requests.js?v=2"></script></body>')
         return Response(page,mimetype="text/html",headers={"Cache-Control":"no-store"})
     @app.get("/warsztat/rodo")
     def workshop_rodo():
