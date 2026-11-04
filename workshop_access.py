@@ -281,7 +281,7 @@ GUEST_R238_HTML = r"""
 })();
 </script>
 """
-GUEST_HTML = GUEST_HTML.replace('<main><section class="panel"', '<main style="position:relative"><div style="position:absolute;top:0;right:0;z-index:25">' + GUEST_R238_HTML + '</div><section class="panel"', 1)
+GUEST_HTML = GUEST_HTML.replace('<main><section class="panel"', '<main style="position:relative"><div style="position:absolute;top:0;right:-3cm;z-index:25">' + GUEST_R238_HTML + '</div><section class="panel"', 1)
 # Also show the intake form on the logged-out workshop landing page.
 # The create endpoint accepts public submissions; request listing remains staff-only.
 LOGIN_HTML = LOGIN_HTML.replace(
