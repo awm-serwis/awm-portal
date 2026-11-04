@@ -229,10 +229,10 @@ async function openCase(c,button){
 # R238: the customer panel uses GUEST_HTML, not WORKSHOP_PAGE.
 # Show the intake tile on the customer's actual /warsztat page.
 GUEST_R238_HTML = r"""
-<section class="panel" id="awmR238Intake" aria-labelledby="awmR238Title">
-  <h2 id="awmR238Title">✉ Zgłoszenia do warsztatu</h2>
-  <p class="muted">Zgłoś usterkę lub poproś o kontakt. Zgłoszenie trafi do kolejki warsztatu.</p>
-  <button type="button" id="awmR238Open" aria-expanded="false" aria-controls="awmR238Form">✉ WYŚLIJ ZGŁOSZENIE</button>
+<section class="panel" id="awmR238Intake" aria-label="Zgłoszenie do warsztatu" style="width:max-content;max-width:100%;padding:8px;margin:0;border-radius:11px">
+
+
+  <button type="button" id="awmR238Open" aria-expanded="false" aria-controls="awmR238Form" style="padding:9px 12px;font-size:12px">✉ WYŚLIJ ZGŁOSZENIE</button>
   <form id="awmR238Form" hidden style="margin-top:16px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
 <label>Rej / marka i model *<input name="registration" required maxlength="80" placeholder="np. DOL12345 / Fiat Tipo"></label>
@@ -249,7 +249,18 @@ GUEST_R238_HTML = r"""
   const status=document.getElementById('awmR238Status'),send=document.getElementById('awmR238Send');
   open.addEventListener('click',function(){
     form.hidden=!form.hidden;open.setAttribute('aria-expanded',String(!form.hidden));
-    if(!form.hidden)form.querySelector('input').focus();
+    const card=document.getElementById('awmR238Intake');card.style.width=form.hidden?'max-content':'min(420px,100%)';
+    if(!form.hidden){
+      const input=form.querySelector('input[name="registration"]');
+      const vehicles=document.querySelectorAll('.vehicle');
+      if(input && !input.value && vehicles.length===1){
+        const car=vehicles[0], name=car.querySelector('h3')?.textContent?.trim()||'';
+        const meta=car.querySelector('.meta')?.textContent||'';
+        const plate=(meta.match(/Rejestracja:\\s*([^•]+)/)||[])[1]?.trim()||'';
+        input.value=[plate==='—'?'':plate,name].filter(Boolean).join(' / ');
+      }
+      form.querySelector('input').focus();
+    }
   });
   form.addEventListener('submit',async function(ev){
     ev.preventDefault();send.disabled=true;status.textContent='Zapisywanie zgłoszenia...';
@@ -270,12 +281,12 @@ GUEST_R238_HTML = r"""
 })();
 </script>
 """
-GUEST_HTML = GUEST_HTML.replace('<main><section class="panel"', '<main>' + GUEST_R238_HTML + '<section class="panel"', 1)
+GUEST_HTML = GUEST_HTML.replace('<main><section class="panel"', '<main><div style="display:flex;justify-content:flex-end;margin:0 0 12px">' + GUEST_R238_HTML + '</div><section class="panel"', 1)
 # Also show the intake form on the logged-out workshop landing page.
 # The create endpoint accepts public submissions; request listing remains staff-only.
 LOGIN_HTML = LOGIN_HTML.replace(
-    "</main>",
-    GUEST_R238_HTML.replace('<section class="panel"', '<section class="card" style="margin-top:18px"') + "</main>",
+    "</header>",
+    '</header><div style="display:flex;justify-content:flex-end;padding:10px 5vw 0">' + GUEST_R238_HTML + "</div>",
     1,
 )
 
