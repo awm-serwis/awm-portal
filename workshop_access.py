@@ -235,13 +235,10 @@ GUEST_R238_HTML = r"""
   <button type="button" id="awmR238Open" aria-expanded="false" aria-controls="awmR238Form">✉ WYŚLIJ ZGŁOSZENIE</button>
   <form id="awmR238Form" hidden style="margin-top:16px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-      <label>Imię i nazwisko *<input name="customer" required maxlength="180" autocomplete="name"></label>
-      <label>Numer rejestracyjny *<input name="registration" required maxlength="40" autocomplete="off"></label>
-      <label>Telefon<input name="phone" maxlength="50" autocomplete="tel"></label>
-      <label>E-mail<input name="email" type="email" maxlength="254" autocomplete="email"></label>
-      <label>Pojazd<input name="vehicle" maxlength="200"></label>
+<label>Rej / marka i model *<input name="registration" required maxlength="80" placeholder="np. DOL12345 / Fiat Tipo"></label>
     </div>
-    <label>Opis usterki lub zgłoszenia *<textarea name="description" required maxlength="5000" style="display:block;width:100%;min-height:110px;padding:12px;border:1px solid #afcbbc;border-radius:8px;font:inherit"></textarea></label>
+    <label>Opis usterki *<textarea name="description" required maxlength="5000" style="display:block;width:100%;min-height:110px;padding:12px;border:1px solid #afcbbc;border-radius:8px;font:inherit"></textarea></label>
+    <label style="font-weight:400">Zlecający <small style="color:#82968c">(opcjonalnie)</small><input name="customer" maxlength="180" placeholder="Imię lub nazwa firmy"></label>
     <button type="submit" id="awmR238Send">WYŚLIJ DO WARSZTATU</button>
   </form>
   <p id="awmR238Status" role="status" aria-live="polite" style="margin-bottom:0"></p>
