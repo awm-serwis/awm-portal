@@ -339,6 +339,78 @@ def install(app):
         except Exception:return err('Zdjęcie niedostępne',503)
 
 
+
+    @app.post('/api/warsztat/cases/<uuid:cid>/email-report')
+    def awm_workshop_email_report_r250(cid):
+        """Explicitly requested report copy for authenticated, assigned customer."""
+        import re, smtplib, ssl
+        from email.message import EmailMessage
+        from email.utils import formataddr
+        user=session.get('user') or {}
+        if user.get('role')!='workshop_guest':
+            return err('Zaloguj się jako klient',403)
+        origin=request.headers.get('Origin','').rstrip('/')
+        if origin and origin!=request.host_url.rstrip('/'):
+            return err('Niedozwolone pochodzenie',403)
+        if request.headers.get('Sec-Fetch-Site','same-origin') not in ('same-origin','none'):
+            return err('Niedozwolone żądanie',403)
+        x=request.get_json(silent=True) or {}
+        if not isinstance(x,dict):return err('Nieprawidłowe dane',400)
+        dest=str(x.get('email') or '').strip()
+        if len(dest)>254 or not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+",dest):
+            return err('Podaj prawidłowy adres e-mail',400)
+        if not permitted(str(cid)):
+            return err('Brak dostępu do tego pojazdu',403)
+        host=os.getenv('AWM_SMTP_HOST','').strip()
+        username=os.getenv('AWM_SMTP_USER','').strip()
+        password=os.getenv('AWM_SMTP_PASSWORD','')
+        sender=os.getenv('AWM_SMTP_FROM','').strip() or username
+        if not host or not sender or (username and not password):
+            return err('Wysyłka nie jest skonfigurowana na serwerze; skontaktuj się z warsztatem',503)
+        try:
+            port=int(os.getenv('AWM_SMTP_PORT','587'))
+            if port not in (465,587):return err('Nieprawidłowa konfiguracja serwera poczty',503)
+            rows=sb.table('awm_workshop_cases').select('repair_no,label,vehicle,sections').eq('id',str(cid)).limit(1).execute().data or []
+            if not rows:return err('Nie znaleziono pojazdu',404)
+            case=rows[0];sec=case.get('sections') or {}
+            reports=[a for a in (sec.get('_awm_attachments') or []) if isinstance(a,dict) and a.get('kind')=='report' and a.get('path') and a.get('mime')=='application/pdf']
+            if not reports:return err('Gotowy raport PDF nie został jeszcze opublikowany',409)
+            report=reports[-1]
+            raw=sb.storage.from_(BUCKET).download(report['path'])
+            if not raw.startswith(b'%PDF-') or len(raw)>12*1024*1024:
+                return err('Raport jest niedostępny lub za duży',503)
+            vehicle=case.get('vehicle') or {}
+            ident=(' '.join(str(vehicle.get(k) or '') for k in ('marka','model','rejestracja'))).strip()[:200]
+            costs=sec.get('koszty')
+            if isinstance(costs,(dict,list)):
+                import json
+                costs_text=json.dumps(costs,ensure_ascii=False,indent=2)
+            else:
+                costs_text=str(costs or 'Nie podano')
+            costs_text=costs_text[:5000]
+            msg=EmailMessage()
+            msg['From']=sender
+            msg['To']=dest
+            msg['Subject']='AWM Warsztat – raport i koszty naprawy '+ident
+            msg.set_content('Raport diagnostyczny pojazdu: '+ident+'\\nNumer zlecenia: '+str(case.get('repair_no') or '—')+'\\n\\nKoszty naprawy (zgodnie z aktualnie opublikowaną kartą):\\n'+costs_text+'\\n\\nW załączeniu znajduje się gotowy raport PDF.\\nAWM Warsztat')
+            name=os.path.basename(str(report.get('name') or 'Raport.pdf')).replace('\\r','').replace('\\n','')[:120]
+            if not name.lower().endswith('.pdf'):name='Raport.pdf'
+            msg.add_attachment(raw,maintype='application',subtype='pdf',filename=name)
+            context=ssl.create_default_context()
+            if port==465:
+                with smtplib.SMTP_SSL(host,port,timeout=15,context=context) as smtp:
+                    if username:smtp.login(username,password)
+                    smtp.send_message(msg)
+            else:
+                with smtplib.SMTP(host,port,timeout=15) as smtp:
+                    smtp.starttls(context=context)
+                    if username:smtp.login(username,password)
+                    smtp.send_message(msg)
+            return jsonify(ok=True,message='Raport i koszty wysłano na wskazany adres')
+        except Exception:
+            app.logger.exception('Warsztat email-report delivery failed')
+            return err('Nie udało się wysłać raportu. Spróbuj ponownie później',503)
+
     @app.get('/api/warsztat/cases/<uuid:cid>/attachments/<uuid:aid>')
     def awm_workshop_download_attachment_r150(cid,aid):
         try:
