@@ -211,10 +211,10 @@ function render(){
     if(!confirm('Wysłać raport PDF wraz z kosztami na '+address+'?'))return;
     send.disabled=true;note.textContent='Wysyłanie…';
     try{
-     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/email-report',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:address})});
+     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/request-email-report',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:address})});
      const response=await r.json();
      if(!r.ok||!response.ok)throw Error(response.error||'Nie udało się wysłać');
-     note.textContent=response.message||'Wysłano raport.';
+     note.textContent=response.message||'Żądanie zapisano. Raport wyśle warsztat.';
     }catch(e){note.textContent=e.message||'Błąd wysyłki'}
     finally{send.disabled=false}
    };
@@ -458,7 +458,7 @@ header.awm-workshop-header .topbuttons{background:linear-gradient(90deg,transpar
             else:
                 # An external account may only open one case after its PIN is verified.
                 allowed=allowed or (path=="/api/warsztat/r238/requests" and request.method=="POST")
-                allowed=allowed or path=="/api/warsztat/cases" or bool(re.fullmatch(r"/api/warsztat/cases/[0-9a-fA-F-]{36}(?:/unlock|/photo|/approval|/email-report|/attachments/[0-9a-fA-F-]{36})?",path))
+                allowed=allowed or path=="/api/warsztat/cases" or bool(re.fullmatch(r"/api/warsztat/cases/[0-9a-fA-F-]{36}(?:/unlock|/photo|/approval|/email-report|/request-email-report|/attachments/[0-9a-fA-F-]{36})?",path))
             if not allowed:
                 if path.startswith("/api/"):return jsonify(error="To konto nie ma dostępu do tego modułu"),403
                 return redirect("/warsztat",302)
