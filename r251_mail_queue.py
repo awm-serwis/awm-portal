@@ -42,7 +42,7 @@ def install(app):
             payload=request.get_json(silent=True) or {}
             if not isinstance(payload,dict):return error("Nieprawidłowy formularz",400)
             recipient=str(payload.get("email") or "").strip()
-            if len(recipient)>254 or not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+",recipient):
+            if len(recipient)>254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",recipient):
                 return error("Podaj poprawny adres e-mail",400)
             attachments=(row.get("sections") or {}).get("_awm_attachments") or []
             reports=[x for x in attachments if isinstance(x,dict) and x.get("kind")=="report" and x.get("mime")=="application/pdf" and x.get("path") and x.get("id")]
