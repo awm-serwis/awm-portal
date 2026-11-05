@@ -43,7 +43,7 @@ def install(app):
     def approval_public(row):
         record=(row.get('sections') or {}).get('_awm_approval') or {}
         if not isinstance(record,dict):record={}
-        return {k:str(record.get(k) or '') for k in ('status','person','decided_at','request_id')}
+        return {k:str(record.get(k) or '') for k in ('status','person','decided_at','request_id','authorization_number')}
     @app.post('/api/admin/workshop/cases')
     def awm_workshop_publish_r42():
         if not api():return err('Brak autoryzacji programu AWM',403)
@@ -269,6 +269,9 @@ def install(app):
         person=str(x.get('person') or '').strip()
         if len(person)<2 or len(person)>100 or any(ord(c)<32 for c in person):
             return err('Wpisz imię i nazwisko osoby udzielającej zgody',400)
+        auth_number=str(x.get('authorization_number') or '').strip()
+        if len(auth_number)>60 or any(ord(ch)<32 for ch in auth_number):
+            return err('Nieprawidłowy numer autoryzacji',400)
         if x.get('confirm') is not True:return err('Potwierdź świadome udzielenie zgody',400)
         try:
             rows=sb.table('awm_workshop_cases').select('id,sections,stages').eq('id',str(cid)).limit(1).execute().data or []
@@ -288,7 +291,7 @@ def install(app):
             if not request_id or request_id!=approval.get('request_id'):
                 return err('Prośba została odnowiona. Odśwież kartę pojazdu.',409)
             approval={'status':'approved','person':person,'decided_at':datetime.now(timezone.utc).isoformat(timespec='seconds'),
-                      'request_id':request_id,'user_id':str(user.get('id')),'login':str(user.get('login') or '')}
+                      'request_id':request_id,'authorization_number':auth_number,'user_id':str(user.get('id')),'login':str(user.get('login') or '')}
             sec['_awm_approval']=approval
             # The customer's acceptance immediately advances the published vehicle status.
             # Preserve previous stage history and record the server-side confirmation time.
