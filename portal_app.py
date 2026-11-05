@@ -1223,6 +1223,8 @@ def awm_workshop_requests_redirect():
 # Standalone Warsztat login and staff administration.
 from workshop_access import install_workshop_access
 install_workshop_access(app)
+from r251_mail_queue import install as install_r251_mail_queue
+install_r251_mail_queue(app)
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '10000'))
