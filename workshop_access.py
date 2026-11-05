@@ -172,6 +172,7 @@ function render(){
    consentBox.style.cssText='background:#eaf7ef;border:1px solid #add7be;border-radius:9px;padding:11px;margin-top:5px';
    const heading=document.createElement('strong');heading.textContent='Zgoda na naprawę';consentBox.appendChild(heading);
    const person=document.createElement('input');person.placeholder='Imię i nazwisko osoby udzielającej zgody';person.autocomplete='name';person.maxLength=100;person.style.marginTop='8px';consentBox.appendChild(person);
+   const auth=document.createElement('input');auth.placeholder='Numer autoryzacji (opcjonalnie)';auth.maxLength=60;auth.style.marginTop='8px';consentBox.appendChild(auth);
    const checkRow=document.createElement('label');checkRow.style.cssText='display:flex;align-items:flex-start;gap:8px;font-weight:500';
    const cb=document.createElement('input');cb.type='checkbox';cb.style.cssText='width:auto;margin-top:4px';checkRow.appendChild(cb);
    const checkText=document.createElement('span');checkText.textContent='Potwierdzam, że udzielam zgody na naprawę wskazanego pojazdu.';checkRow.appendChild(checkText);consentBox.appendChild(checkRow);
@@ -182,7 +183,7 @@ function render(){
     if(name.length<2||!cb.checked){message.textContent='Wpisz dane osoby i zaznacz potwierdzenie zgody.';return}
     accept.disabled=true;message.textContent='';
     try{
-     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/approval',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({person:name,confirm:true,request_id:consent.request_id})});
+     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/approval',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({person:name,authorization_number:auth.value.trim(),confirm:true,request_id:consent.request_id})});
      const response=await r.json();
      if(!r.ok||!response.ok)throw Error(response.error||'Nie zapisano zgody');
      c.approval=response.approval;render();
@@ -192,8 +193,32 @@ function render(){
    item.appendChild(consentBox);
   }else if(consent.status==='approved'){
    const approved=document.createElement('div');approved.style.cssText='color:#08713d;font-weight:700;font-size:13px';
-   approved.textContent='✓ Zgoda udzielona: '+(consent.person||'—')+' • '+(consent.decided_at?new Date(consent.decided_at).toLocaleString('pl-PL'):'—');
+   approved.textContent='✓ Zgoda udzielona: '+(consent.person||'—')+' • '+(consent.decided_at?new Date(consent.decided_at).toLocaleString('pl-PL'):'—')+(consent.authorization_number?' • Nr autoryzacji: '+consent.authorization_number:'');
    item.appendChild(approved);
+  }
+
+  if((Array.isArray(c.attachments)?c.attachments:[]).some(a=>a.kind==='report')){
+   const mailBox=document.createElement('div');mailBox.style.cssText='padding:10px 11px;border:1px solid #c8e0d0;border-radius:9px;background:#f4faf6;margin-top:5px';
+   const show=document.createElement('button');show.type='button';show.textContent='✉ WYŚLIJ KOPIĘ RAPORTU I KOSZTÓW';mailBox.appendChild(show);
+   const form=document.createElement('div');form.hidden=true;form.style.cssText='margin-top:9px';
+   const email=document.createElement('input');email.type='email';email.placeholder='Adres e-mail (opcjonalnie)';email.autocomplete='email';email.maxLength=254;email.setAttribute('aria-label','Adres do wysłania raportu');form.appendChild(email);
+   const send=document.createElement('button');send.type='button';send.textContent='WYŚLIJ NA E-MAIL';send.style.marginTop='8px';form.appendChild(send);
+   const note=document.createElement('p');note.setAttribute('role','status');note.style.cssText='font-size:12px;margin:8px 0 0';form.appendChild(note);
+   show.onclick=()=>{form.hidden=!form.hidden;show.setAttribute('aria-expanded',String(!form.hidden));if(!form.hidden)email.focus()};
+   send.onclick=async()=>{
+    const address=email.value.trim();
+    if(!email.checkValidity()||!address){note.textContent='Wpisz poprawny adres e-mail.';return}
+    if(!confirm('Wysłać raport PDF wraz z kosztami na '+address+'?'))return;
+    send.disabled=true;note.textContent='Wysyłanie…';
+    try{
+     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/email-report',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:address})});
+     const response=await r.json();
+     if(!r.ok||!response.ok)throw Error(response.error||'Nie udało się wysłać');
+     note.textContent=response.message||'Wysłano raport.';
+    }catch(e){note.textContent=e.message||'Błąd wysyłki'}
+    finally{send.disabled=false}
+   };
+   mailBox.appendChild(form);item.appendChild(mailBox);
   }
   list.appendChild(item);
  }
