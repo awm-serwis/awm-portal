@@ -56,10 +56,35 @@ def start_repair(item_id):
         rows = store().select("id,status").eq("id",item_id).limit(1).execute().data or []
         if not rows: return jsonify(error="Nie znaleziono zgłoszenia"), 404
         if rows[0]["status"] == "repair": return jsonify(ok=True, already_moved=True)
-        if rows[0]["status"] != "new": return jsonify(error="Nieprawidłowy status"), 409
+        if rows[0]["status"] not in ("new", "order"): return jsonify(error="Nieprawidłowy status"), 409
         now = datetime.now(timezone.utc).isoformat()
-        changed = store().update({"status":"repair","repair_started_utc":now,"updated_utc":now}).eq("id",item_id).eq("status","new").execute().data or []
+        changed = store().update({"status":"repair","repair_started_utc":now,"updated_utc":now}).eq("id",item_id).in_("status",["new","order"]).execute().data or []
         if not changed: return jsonify(error="Zgłoszenie zostało już zmienione"), 409
     except Exception:
         return jsonify(error="Nie udało się zmienić statusu"), 503
     return jsonify(ok=True, status="repair")
+
+@bp.post("/api/warsztat/r238/requests/<int:item_id>/to-order")
+def move_to_order(item_id):
+    if not authorized(): return jsonify(error="Brak autoryzacji"), 403
+    try:
+        rows=store().select("id,status").eq("id",item_id).limit(1).execute().data or []
+        if not rows: return jsonify(error="Nie znaleziono zgłoszenia"),404
+        if rows[0]["status"]=="order": return jsonify(ok=True,already_moved=True,status="order")
+        if rows[0]["status"]!="new": return jsonify(error="Zgłoszenie nie jest nowe"),409
+        changed=store().update({"status":"order","updated_utc":datetime.now(timezone.utc).isoformat()}).eq("id",item_id).eq("status","new").execute().data or []
+        if not changed: return jsonify(error="Zgłoszenie zostało już zmienione"),409
+    except Exception:
+        return jsonify(error="Nie udało się przenieść do zleceń"),503
+    return jsonify(ok=True,status="order")
+
+@bp.delete("/api/warsztat/r238/requests/<int:item_id>")
+def delete_request(item_id):
+    if not authorized(): return jsonify(error="Brak autoryzacji"),403
+    try:
+        rows=store().select("id").eq("id",item_id).limit(1).execute().data or []
+        if not rows: return jsonify(error="Nie znaleziono zgłoszenia"),404
+        store().delete().eq("id",item_id).execute()
+    except Exception:
+        return jsonify(error="Nie udało się usunąć zgłoszenia"),503
+    return jsonify(ok=True,deleted=item_id)
