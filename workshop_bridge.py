@@ -343,6 +343,8 @@ def install(app):
     @app.post('/api/warsztat/cases/<uuid:cid>/email-report')
     def awm_workshop_email_report_r250(cid):
         """Explicitly requested report copy for authenticated, assigned customer."""
+        from flask import current_app
+        return current_app.view_functions["request_email_report_r251"](cid)
         import re, smtplib, ssl
         from email.message import EmailMessage
         from email.utils import formataddr
