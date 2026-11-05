@@ -44,6 +44,19 @@ def install(app):
         record=(row.get('sections') or {}).get('_awm_approval') or {}
         if not isinstance(record,dict):record={}
         return {k:str(record.get(k) or '') for k in ('status','person','decided_at','request_id','authorization_number')}
+    # R268: read-only case identity map, using the existing desktop API key.
+    @app.get('/api/admin/workshop/case-ids')
+    def awm_workshop_case_ids_r268():
+        if not api():return err('Brak autoryzacji programu AWM',403)
+        try:
+            rows=(sb.table('awm_workshop_cases')
+                  .select('id,desktop_case_id,vehicle')
+                  .eq('source','AWM WARSZTAT').limit(1000).execute().data or [])
+            return jsonify(ok=True,cases=rows)
+        except Exception:
+            app.logger.exception('R268 case identity map failed')
+            return err('Nie mozna sprawdzic powiazan zlecen',503)
+
     @app.post('/api/admin/workshop/cases')
     def awm_workshop_publish_r42():
         if not api():return err('Brak autoryzacji programu AWM',403)
