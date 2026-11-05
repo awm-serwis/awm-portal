@@ -44,11 +44,8 @@ def install(app):
             recipient=str(payload.get("email") or "").strip()
             if len(recipient)>254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",recipient):
                 return error("Podaj poprawny adres e-mail",400)
-            attachments=(row.get("sections") or {}).get("_awm_attachments") or []
-            reports=[x for x in attachments if isinstance(x,dict) and x.get("kind")=="report" and x.get("mime")=="application/pdf" and x.get("path") and x.get("id")]
-            if not reports:return error("Brak gotowego raportu PDF",409)
-            chosen=reports[-1]
-            aid=str(uuid.UUID(str(chosen["id"])))
+            # R264: the attachment is generated from the WORKSHOP ORDER on AWM PRO.
+            # Never require an existing diagnostic PDF here.
             recent=(table().select("id,recipient_email,status,requested_at")
                  .eq("case_id",str(cid))
                  .gte("requested_at",(datetime.now(timezone.utc)-timedelta(hours=24)).isoformat())
@@ -57,7 +54,7 @@ def install(app):
             if waiting:return jsonify(ok=True,queued=True,already_queued=True,request_id=waiting["id"],message="Żądanie jest już w kolejce AWM PRO")
             if len(recent)>=5:return error("Limit 5 próśb na pojazd na dobę; skontaktuj się z warsztatem",429)
             saved=table().insert({"case_id":str(cid),"recipient_email":recipient,
-                       "report_attachment_id":aid,"status":"pending"}).execute().data or []
+                       "report_attachment_id":None,"status":"pending"}).execute().data or []
             if not saved:return error("Nie zapisano prośby",503)
             return jsonify(ok=True,queued=True,request_id=saved[0]["id"],message="Prośbę przekazano do AWM PRO. Wysyłka nastąpi po obsłużeniu przez warsztat"),202
         except Exception:
@@ -133,6 +130,18 @@ def install(app):
             app.logger.exception("R251 cannot complete email")
             return error("Nie zapisano rezultatu wysyłki",503)
 
+    @app.post("/api/admin/workshop/report-mail-queue/<uuid:qid>/cancel")
+    def r264_cancel_unsent_order(qid):
+        if not api_authorized():return error("Brak autoryzacji AWM",403)
+        try:
+            rows=table().update({"status":"cancelled","completed_at":datetime.now(timezone.utc).isoformat(),
+                "error":"Anulowano w AWM PRO"}).eq("id",str(qid)).in_("status",["pending","failed"]).execute().data or []
+            if not rows:return error("Zamówienie zostało już podjęte albo wysłane",409)
+            return jsonify(ok=True,status="cancelled")
+        except Exception:
+            app.logger.exception("R264 cancel failed")
+            return error("Nie można anulować zamówienia",503)
+
     @app.get("/api/admin/workshop/report-mail-queue/<uuid:qid>/case")
     def report_queue_case_r251(qid):
         if not api_authorized():return error("Brak autoryzacji AWM",403)
@@ -143,5 +152,5 @@ def install(app):
             if not rows:return error("Brak pojazdu",404)
             row=rows[0]
             sec=row.get("sections") or {}
-            return jsonify(ok=True,repair_no=row.get("repair_no"),vehicle=row.get("vehicle"),costs=sec.get("koszty") or {})
+            return jsonify(ok=True,repair_no=row.get("repair_no"),vehicle=row.get("vehicle"),costs=sec.get("koszty") or {},fault=sec.get("usterka") or "",diagnosis=sec.get("diagnoza") or "",scope=sec.get("zakres") or "",parts=sec.get("czesci") or "",approval=sec.get("_awm_approval") or {})
         except Exception:return error("Nie można pobrać danych raportu",503)
