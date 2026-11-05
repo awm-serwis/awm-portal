@@ -197,9 +197,9 @@ function render(){
    item.appendChild(approved);
   }
 
-  if((Array.isArray(c.attachments)?c.attachments:[]).some(a=>a.kind==='report')){
+  {
    const mailBox=document.createElement('div');mailBox.style.cssText='padding:10px 11px;border:1px solid #c8e0d0;border-radius:9px;background:#f4faf6;margin-top:5px';
-   const show=document.createElement('button');show.type='button';show.textContent='✉ WYŚLIJ KOPIĘ RAPORTU I KOSZTÓW';mailBox.appendChild(show);
+   const show=document.createElement('button');show.type='button';show.textContent='✉ WYŚLIJ PODSUMOWANIE ZLECENIA (PDF)';mailBox.appendChild(show);
    const form=document.createElement('div');form.hidden=true;form.style.cssText='margin-top:9px';
    const email=document.createElement('input');email.type='email';email.placeholder='Adres e-mail (opcjonalnie)';email.autocomplete='email';email.maxLength=254;email.setAttribute('aria-label','Adres do wysłania raportu');form.appendChild(email);
    const send=document.createElement('button');send.type='button';send.textContent='WYŚLIJ NA E-MAIL';send.style.marginTop='8px';form.appendChild(send);
@@ -208,7 +208,7 @@ function render(){
    send.onclick=async()=>{
     const address=email.value.trim();
     if(!email.checkValidity()||!address){note.textContent='Wpisz poprawny adres e-mail.';return}
-    if(!confirm('Wysłać raport PDF wraz z kosztami na '+address+'?'))return;
+    if(!confirm('Zamówić PDF całego zlecenia warsztatowego (bez raportu diagnostycznego) na '+address+'?'))return;
     send.disabled=true;note.textContent='Wysyłanie…';
     try{
      const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/request-email-report',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:address})});
