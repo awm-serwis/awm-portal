@@ -357,7 +357,7 @@ def install(app):
         x=request.get_json(silent=True) or {}
         if not isinstance(x,dict):return err('Nieprawidłowe dane',400)
         dest=str(x.get('email') or '').strip()
-        if len(dest)>254 or not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+",dest):
+        if len(dest)>254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",dest):
             return err('Podaj prawidłowy adres e-mail',400)
         if not permitted(str(cid)):
             return err('Brak dostępu do tego pojazdu',403)
@@ -392,8 +392,8 @@ def install(app):
             msg['From']=sender
             msg['To']=dest
             msg['Subject']='AWM Warsztat – raport i koszty naprawy '+ident
-            msg.set_content('Raport diagnostyczny pojazdu: '+ident+'\\nNumer zlecenia: '+str(case.get('repair_no') or '—')+'\\n\\nKoszty naprawy (zgodnie z aktualnie opublikowaną kartą):\\n'+costs_text+'\\n\\nW załączeniu znajduje się gotowy raport PDF.\\nAWM Warsztat')
-            name=os.path.basename(str(report.get('name') or 'Raport.pdf')).replace('\\r','').replace('\\n','')[:120]
+            msg.set_content('Raport diagnostyczny pojazdu: '+ident+'\nNumer zlecenia: '+str(case.get('repair_no') or '—')+'\n\nKoszty naprawy (zgodnie z aktualnie opublikowaną kartą):\n'+costs_text+'\n\nW załączeniu znajduje się gotowy raport PDF.\nAWM Warsztat')
+            name=os.path.basename(str(report.get('name') or 'Raport.pdf')).replace('\r','').replace('\n','')[:120]
             if not name.lower().endswith('.pdf'):name='Raport.pdf'
             msg.add_attachment(raw,maintype='application',subtype='pdf',filename=name)
             context=ssl.create_default_context()
