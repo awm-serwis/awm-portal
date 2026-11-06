@@ -385,9 +385,13 @@ def install_workshop_access(app):
         return current.get("role") if isinstance(current,dict) else None
     def workshop_login():
         result=original_login()
+        # Do not overwrite an invalid-password response with an unrelated role error.
+        response=app.make_response(result)
+        if response.status_code >= 400:
+            return result
         if logged_role() not in ("admin","workshop","workshop_guest"):
             session.clear()
-            return jsonify(error="Brak uprawnień do Warsztatu"),401
+            return jsonify(error="Konto nie ma aktywnej roli klienta Warsztatu. Administrator musi przywrócić dostęp do tego konta."),403
         return result
     def workshop_page():
         role=logged_role()
