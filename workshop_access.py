@@ -177,20 +177,38 @@ function render(){
    const cb=document.createElement('input');cb.type='checkbox';cb.style.cssText='width:auto;margin-top:4px';checkRow.appendChild(cb);
    const checkText=document.createElement('span');checkText.textContent='Potwierdzam, że udzielam zgody na naprawę wskazanego pojazdu.';checkRow.appendChild(checkText);consentBox.appendChild(checkRow);
    const accept=document.createElement('button');accept.type='button';accept.textContent='✓ UDZIELAM ZGODY';consentBox.appendChild(accept);
+   const refuse=document.createElement('button');refuse.type='button';refuse.textContent='✕ ODMAWIAM UDZIELENIA ZGODY';refuse.style.cssText='background:#b52d43;color:white;margin-left:8px';consentBox.appendChild(refuse);
    const message=document.createElement('p');message.setAttribute('role','alert');message.className='error';consentBox.appendChild(message);
    accept.onclick=async()=>{
     const name=person.value.trim();
     if(name.length<2||!cb.checked){message.textContent='Wpisz dane osoby i zaznacz potwierdzenie zgody.';return}
-    accept.disabled=true;message.textContent='';
+    accept.disabled=true;refuse.disabled=true;message.textContent='';
     try{
-     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/approval',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({person:name,authorization_number:auth.value.trim(),confirm:true,request_id:consent.request_id})});
+     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/approval',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({person:name,authorization_number:auth.value.trim(),confirm:true,decision:'approved',request_id:consent.request_id})});
      const response=await r.json();
      if(!r.ok||!response.ok)throw Error(response.error||'Nie zapisano zgody');
      c.approval=response.approval;render();
     }catch(e){message.textContent=e.message||'Błąd zapisu zgody'}
-    finally{accept.disabled=false}
+    finally{accept.disabled=false;refuse.disabled=false}
+   };
+   refuse.onclick=async()=>{
+    const name=person.value.trim();
+    if(name.length<2){message.textContent='Wpisz imię i nazwisko osoby odmawiającej zgody.';return}
+    if(!window.confirm('Czy na pewno odmawiasz zgody na naprawę tego pojazdu? Decyzja zostanie zapisana z datą.'))return;
+    refuse.disabled=true;accept.disabled=true;message.textContent='';
+    try{
+     const r=await fetch('/api/warsztat/cases/'+encodeURIComponent(c.id)+'/approval',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({person:name,decision:'refused',confirm_refusal:true,request_id:consent.request_id})});
+     const response=await r.json();
+     if(!r.ok||!response.ok)throw Error(response.error||'Nie zapisano odmowy');
+     c.approval=response.approval;render();
+    }catch(e){message.textContent=e.message||'Błąd zapisu odmowy'}
+    finally{refuse.disabled=false;accept.disabled=false}
    };
    item.appendChild(consentBox);
+  }else if(consent.status==='refused'){
+   const refused=document.createElement('div');refused.style.cssText='color:#ae2538;font-weight:700;font-size:13px';
+   refused.textContent='✕ Odmowa zgody na naprawę: '+(consent.person||'—')+' • '+(consent.decided_at?new Date(consent.decided_at).toLocaleString('pl-PL'):'—');
+   item.appendChild(refused);
   }else if(consent.status==='approved'){
    const approved=document.createElement('div');approved.style.cssText='color:#08713d;font-weight:700;font-size:13px';
    approved.textContent='✓ Zgoda udzielona: '+(consent.person||'—')+' • '+(consent.decided_at?new Date(consent.decided_at).toLocaleString('pl-PL'):'—')+(consent.authorization_number?' • Nr autoryzacji: '+consent.authorization_number:'');
