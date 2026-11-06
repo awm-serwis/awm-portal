@@ -94,11 +94,11 @@ def install(app):
             if incoming_status=='Oczekiwanie na zgodę klienta':
                 if is_new:
                     approval={'status':'pending','person':'','decided_at':'','request_id':requested_id or str(uuid.uuid4())}
-                elif approval.get('status')=='approved':
-                    # Desktop may still be waiting for its first refresh. Never undo
-                    # a consent already approved for the same request.
-                    stages.append({'name':'Zgoda na naprawę','since':approval.get('decided_at') or datetime.now(timezone.utc).isoformat()})
-                elif old_status not in ('Oczekiwanie na zgodę klienta','Zgoda na naprawę'):
+                elif approval.get('status') in ('approved','refused'):
+                    # Preserve the customer's decision when the desktop refreshes the same request.
+                    stage_name='Zgoda na naprawę' if approval['status']=='approved' else 'Odmowa zgody na naprawę'
+                    stages.append({'name':stage_name,'since':approval.get('decided_at') or datetime.now(timezone.utc).isoformat()})
+                elif old_status not in ('Oczekiwanie na zgodę klienta','Zgoda na naprawę','Odmowa zgody na naprawę'):
                     approval={'status':'pending','person':'','decided_at':'','request_id':requested_id or str(uuid.uuid4())}
             elif not isinstance(approval,dict):
                 approval={'status':'none','person':'','decided_at':'','request_id':''}
@@ -285,7 +285,10 @@ def install(app):
         auth_number=str(x.get('authorization_number') or '').strip()
         if len(auth_number)>60 or any(ord(ch)<32 for ch in auth_number):
             return err('Nieprawidłowy numer autoryzacji',400)
-        if x.get('confirm') is not True:return err('Potwierdź świadome udzielenie zgody',400)
+        decision=str(x.get('decision') or 'approved').strip().lower()
+        if decision not in ('approved','refused'):return err('Nieprawidłowa decyzja',400)
+        if decision=='approved' and x.get('confirm') is not True:return err('Potwierdź świadome udzielenie zgody',400)
+        if decision=='refused' and x.get('confirm_refusal') is not True:return err('Potwierdź odmowę udzielenia zgody',400)
         try:
             rows=sb.table('awm_workshop_cases').select('id,sections,stages').eq('id',str(cid)).limit(1).execute().data or []
             if not rows:return err('Nie znaleziono pojazdu',404)
@@ -296,25 +299,28 @@ def install(app):
                 return err('Ten pojazd nie oczekuje na zgodę klienta',409)
             sec=row.get('sections') or {}
             approval=sec.get('_awm_approval') or {}
-            if not isinstance(approval,dict) or approval.get('status') not in ('pending','approved'):
+            if not isinstance(approval,dict) or approval.get('status') not in ('pending','approved','refused'):
                 return err('Brak aktywnej prośby o akceptację',409)
-            if approval.get('status')=='approved':
+            if approval.get('status') in ('approved','refused'):
+                if approval['status']!=decision:return err('Decyzja dotycząca tej prośby została już zapisana',409)
                 return jsonify(ok=True,approval=approval_public(row),already_confirmed=True)
             request_id=str(x.get('request_id') or '')
             if not request_id or request_id!=approval.get('request_id'):
                 return err('Prośba została odnowiona. Odśwież kartę pojazdu.',409)
-            approval={'status':'approved','person':person,'decided_at':datetime.now(timezone.utc).isoformat(timespec='seconds'),
-                      'request_id':request_id,'authorization_number':auth_number,'user_id':str(user.get('id')),'login':str(user.get('login') or '')}
+            approval={'status':decision,'person':person,'decided_at':datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                      'request_id':request_id,'authorization_number':auth_number if decision=='approved' else '',
+                      'user_id':str(user.get('id')),'login':str(user.get('login') or '')}
             sec['_awm_approval']=approval
             # The customer's acceptance immediately advances the published vehicle status.
             # Preserve previous stage history and record the server-side confirmation time.
             stages=list(status)
-            stages.append({'name':'Zgoda na naprawę','since':approval['decided_at']})
+            stage_name='Zgoda na naprawę' if decision=='approved' else 'Odmowa zgody na naprawę'
+            stages.append({'name':stage_name,'since':approval['decided_at']})
             res=sb.table('awm_workshop_cases').update({
                 'sections':sec,'stages':stages,'updated_at':approval['decided_at']
             }).eq('id',str(cid)).execute().data
             if not res:return err('Brak potwierdzenia zapisu zgody',503)
-            return jsonify(ok=True,approval=approval_public({'sections':sec}),stage='Zgoda na naprawę')
+            return jsonify(ok=True,approval=approval_public({'sections':sec}),stage=stage_name)
         except Exception:
             app.logger.exception('Approval write failed')
             return err('Nie udało się zapisać zgody klienta',503)
