@@ -1,0 +1,19 @@
+name: AWM Mobile OTA integrity
+on:
+  pull_request:
+    paths: ['mobile_updates.py', 'tests/test_mobile_updates.py', '.github/workflows/mobile-ota.yml']
+  push:
+    branches: [main]
+    paths: ['mobile_updates.py', 'tests/test_mobile_updates.py', '.github/workflows/mobile-ota.yml']
+permissions:
+  contents: read
+jobs:
+  ota:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install Flask==3.1.2 pytest
+      - run: python -m pytest -q tests/test_mobile_updates.py
