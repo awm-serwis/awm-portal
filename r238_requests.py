@@ -29,6 +29,15 @@ def create_request():
     if not registration or not description:
         return jsonify(error="Wymagane: rej / marka i model oraz opis usterki"), 400
     now = datetime.now(timezone.utc).isoformat()
+    if authorized():
+        marker = re.search(r"\[AWM-MOBILE:[0-9a-f]{32}\]$", description)
+        if marker:
+            try:
+                existing = store().select("public_ref,status").like("description","%"+marker.group()).limit(1).execute().data or []
+                if existing:
+                    return jsonify(ok=True,reference=existing[0]["public_ref"],status=existing[0]["status"],already_exists=True),200
+            except Exception:
+                return jsonify(error="Nie udało się zweryfikować duplikatu"),503
     ref = "AWM-" + secrets.token_hex(8).upper()
     try:
         store().insert({"public_ref":ref, "created_utc":now, "customer":customer,
@@ -47,6 +56,10 @@ def list_requests():
         rows = store().select("*").order("id", desc=True).limit(500).execute().data or []
     except Exception:
         return jsonify(error="Nie udało się pobrać zgłoszeń"), 503
+    try:
+        rows = mobile_overlay(rows)
+    except Exception:
+        return jsonify(error="Nie udało się odczytać statusów mobile"),503
     return jsonify(ok=True, requests=rows)
 
 @bp.post("/api/warsztat/r238/requests/<int:item_id>/start-repair")
@@ -88,3 +101,83 @@ def delete_request(item_id):
     except Exception:
         return jsonify(error="Nie udało się usunąć zgłoszenia"),503
     return jsonify(ok=True,deleted=item_id)
+
+
+# R399: authenticated mobile actions; Gmail delivery remains on the desktop.
+def mobile_jobs():
+    from supabase_backend import sb
+    return sb.table("awm_mobile_actions")
+
+def mobile_overlay(rows):
+    if not rows:
+        return rows
+    ids = [r["id"] for r in rows]
+    actions = []
+    for i in range(0, len(ids), 50):
+        actions.extend(mobile_jobs().select("request_id,kind,state").in_("request_id", ids[i:i+50]).eq("state","done").in_("kind",["check","complete","delete"]).execute().data or [])
+    deleted = {a["request_id"] for a in actions if a["kind"] == "delete"}
+    completed = {a["request_id"] for a in actions if a["kind"] in ("check","complete")}
+    return [dict(r,status="completed") if r["id"] in completed else r for r in rows if r["id"] not in deleted]
+
+@bp.post("/api/warsztat/r238/requests/<int:item_id>/mobile-action")
+def enqueue_mobile(item_id):
+    if not authorized(): return jsonify(error="Brak autoryzacji"),403
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data,dict): return jsonify(error="Nieprawidłowe dane"),400
+    kind = data.get("kind")
+    if kind not in ("check","complete","reply","delete"): return jsonify(error="Nieprawidłowa akcja"),400
+    try:
+        rows = store().select("*").eq("id",item_id).limit(1).execute().data or []
+        if not rows: return jsonify(error="Brak zgłoszenia"),404
+        current = mobile_overlay(rows)
+        if not current: return jsonify(error="Zgłoszenie usunięte"),409
+        row = current[0]
+        if kind in ("check","complete") and row["status"] != "new": return jsonify(error="Zgłoszenie nie jest nowe"),409
+        active = mobile_jobs().select("id,kind,state").eq("request_id",item_id).in_("state",["queued","processing"]).limit(1).execute().data or []
+        if active: return jsonify(error="Operacja jest już w kolejce",job=active[0]),409
+        payload = {"row":row}
+        if kind in ("complete","reply"):
+            email = str(row.get("email") or "").strip()
+            if not re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+",email): return jsonify(error="Brak poprawnego adresu nadawcy zgłoszenia"),400
+            body = "Dzień dobry,\n\nZlecenie zostało zrealizowane.\n\nPozdrawiamy AWM Warsztat" if kind == "complete" else str(data.get("body") or "").strip()
+            if not body or len(body)>5000: return jsonify(error="Treść odpowiedzi: 1–5000 znaków"),400
+            payload.update(email=email,body=body)
+        inserted = mobile_jobs().insert(dict(request_id=item_id,kind=kind,payload=payload)).execute().data or []
+        if not inserted: raise RuntimeError("no job")
+        return jsonify(ok=True,job=inserted[0]["id"]),202
+    except Exception:
+        return jsonify(error="Nie zapisano lub nie potwierdzono kolejki; odśwież przed ponowieniem"),503
+
+@bp.get("/api/warsztat/r238/mobile-actions/<int:job_id>")
+def mobile_state(job_id):
+    if not authorized(): return jsonify(error="Brak autoryzacji"),403
+    try:
+        result=mobile_jobs().select("id,state,error").eq("id",job_id).limit(1).execute().data or []
+        return (jsonify(ok=True,job=result[0]),200) if result else (jsonify(error="Brak operacji"),404)
+    except Exception:
+        return jsonify(error="Nie udało się pobrać stanu operacji"),503
+
+@bp.post("/api/warsztat/r238/mobile-actions/claim")
+def claim_mobile():
+    if not authorized(): return jsonify(error="Brak autoryzacji"),403
+    try:
+        candidates=mobile_jobs().select("id").eq("state","queued").order("id").limit(5).execute().data or []
+        for candidate in candidates:
+            changed=mobile_jobs().update({"state":"processing"}).eq("id",candidate["id"]).eq("state","queued").execute().data or []
+            if changed: return jsonify(ok=True,job=changed[0])
+        return jsonify(ok=True,job=None)
+    except Exception:
+        return jsonify(error="Nie udało się pobrać kolejki"),503
+
+@bp.post("/api/warsztat/r238/mobile-actions/<int:job_id>/finish")
+def finish_mobile(job_id):
+    if not authorized(): return jsonify(error="Brak autoryzacji"),403
+    data=request.get_json(silent=True) or {}
+    if not isinstance(data,dict): return jsonify(error="Nieprawidłowe dane"),400
+    state=data.get("state")
+    if state not in ("done","failed"): return jsonify(error="Nieprawidłowy stan"),400
+    try:
+        changed=mobile_jobs().update({"state":state,"error":str(data.get("error") or "")[:500]}).eq("id",job_id).eq("state","processing").execute().data or []
+        return (jsonify(ok=True),200) if changed else (jsonify(error="Operacja nie jest przetwarzana"),409)
+    except Exception:
+        return jsonify(error="Nie udało się zapisać stanu operacji"),503
