@@ -2,6 +2,7 @@
 import os, secrets, hmac, re
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, session
+from awm_photo_payload import decode_photos
 
 bp = Blueprint("r238_workshop", __name__)
 
@@ -122,10 +123,17 @@ def mobile_overlay(rows):
 @bp.post("/api/warsztat/r238/requests/<int:item_id>/mobile-action")
 def enqueue_mobile(item_id):
     if not authorized(): return jsonify(error="Brak autoryzacji"),403
+    if request.content_length is None or request.content_length > 3500000:
+        return jsonify(error="Przekroczono limit danych lub brak rozmiaru"),413
     data = request.get_json(silent=True) or {}
     if not isinstance(data,dict): return jsonify(error="Nieprawidłowe dane"),400
     kind = data.get("kind")
-    if kind not in ("check","complete","reply","delete"): return jsonify(error="Nieprawidłowa akcja"),400
+    if kind not in ("check","complete","reply","delete","reply_photos"): return jsonify(error="Nieprawidłowa akcja"),400
+    if kind == "reply_photos":
+        try: decode_photos(data.get("photos"))
+        except ValueError as exc: return jsonify(error=str(exc)),400
+    elif "photos" in data:
+        return jsonify(error="Zdjęcia wymagają akcji reply_photos"),400
     try:
         rows = store().select("*").eq("id",item_id).limit(1).execute().data or []
         if not rows: return jsonify(error="Brak zgłoszenia"),404
@@ -136,12 +144,13 @@ def enqueue_mobile(item_id):
         active = mobile_jobs().select("id,kind,state").eq("request_id",item_id).in_("state",["queued","processing"]).limit(1).execute().data or []
         if active: return jsonify(error="Operacja jest już w kolejce",job=active[0]),409
         payload = {"row":row}
-        if kind in ("complete","reply"):
+        if kind in ("complete","reply","reply_photos"):
             email = str(row.get("email") or "").strip()
             if not re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+",email): return jsonify(error="Brak poprawnego adresu nadawcy zgłoszenia"),400
             body = "Dzień dobry,\n\nZlecenie zostało zrealizowane.\n\nPozdrawiamy AWM Warsztat" if kind == "complete" else str(data.get("body") or "").strip()
             if not body or len(body)>5000: return jsonify(error="Treść odpowiedzi: 1–5000 znaków"),400
             payload.update(email=email,body=body)
+            if kind == "reply_photos": payload["photos"] = data["photos"]
         inserted = mobile_jobs().insert(dict(request_id=item_id,kind=kind,payload=payload)).execute().data or []
         if not inserted: raise RuntimeError("no job")
         return jsonify(ok=True,job=inserted[0]["id"]),202
@@ -161,7 +170,10 @@ def mobile_state(job_id):
 def claim_mobile():
     if not authorized(): return jsonify(error="Brak autoryzacji"),403
     try:
-        candidates=mobile_jobs().select("id").eq("state","queued").order("id").limit(5).execute().data or []
+        data = request.get_json(silent=True) or {}
+        kinds = ["check","complete","reply","delete"]
+        if isinstance(data,dict) and data.get("photo_worker") == 407: kinds.append("reply_photos")
+        candidates=mobile_jobs().select("id").eq("state","queued").in_("kind",kinds).order("id").limit(5).execute().data or []
         for candidate in candidates:
             changed=mobile_jobs().update({"state":"processing"}).eq("id",candidate["id"]).eq("state","queued").execute().data or []
             if changed: return jsonify(ok=True,job=changed[0])
@@ -177,7 +189,13 @@ def finish_mobile(job_id):
     state=data.get("state")
     if state not in ("done","failed"): return jsonify(error="Nieprawidłowy stan"),400
     try:
-        changed=mobile_jobs().update({"state":state,"error":str(data.get("error") or "")[:500]}).eq("id",job_id).eq("state","processing").execute().data or []
+        update={"state":state,"error":str(data.get("error") or "")[:500]}
+        rows=mobile_jobs().select("kind,payload").eq("id",job_id).eq("state","processing").limit(1).execute().data or []
+        if rows and rows[0]["kind"] == "reply_photos":
+            payload=dict(rows[0]["payload"])
+            payload.pop("photos",None)
+            update["payload"]=payload
+        changed=mobile_jobs().update(update).eq("id",job_id).eq("state","processing").execute().data or []
         return (jsonify(ok=True),200) if changed else (jsonify(error="Operacja nie jest przetwarzana"),409)
     except Exception:
         return jsonify(error="Nie udało się zapisać stanu operacji"),503
