@@ -50,6 +50,35 @@ def create_request():
         return jsonify(error="Nie udało się zapisać zgłoszenia"), 503
     return jsonify(ok=True, reference=ref, status="new"), 201
 
+
+@bp.post("/api/warsztat/r238/requests/<int:item_id>/mail-detail")
+def update_mail_detail(item_id):
+    if not authorized(): return jsonify(error="Brak autoryzacji"),403
+    if request.content_length is None or request.content_length > 250000:
+        return jsonify(error="Przekroczono limit danych"),413
+    data=request.get_json(silent=True)
+    if not isinstance(data,dict): return jsonify(error="Nieprawidłowe dane"),400
+    marker=data.get("marker")
+    body=data.get("body")
+    subject=data.get("subject","")
+    if not isinstance(marker,str) or not re.fullmatch(r"\[AWM-MOBILE:[0-9a-f]{32}\]",marker):
+        return jsonify(error="Nieprawidłowy identyfikator"),400
+    if not isinstance(body,str) or not body.strip() or len(body)>32000 or not isinstance(subject,str) or len(subject)>300:
+        return jsonify(error="Nieprawidłowa treść wiadomości"),400
+    try:
+        rows=store().select("id,description,mail_detail").eq("id",item_id).limit(1).execute().data or []
+        if not rows: return jsonify(error="Brak zgłoszenia"),404
+        current=rows[0]["description"] or ""
+        if not current.endswith(marker): return jsonify(error="Niezgodny identyfikator zgłoszenia"),409
+        if rows[0].get("mail_detail"): return jsonify(ok=True,already_exists=True)
+        detail=(subject.strip()+"\n\n" if subject.strip() else "")+body.strip()
+        changed=store().update({"mail_detail":detail}).eq("id",item_id).eq("description",current).is_("mail_detail","null").execute().data or []
+        if not changed: return jsonify(error="Zgłoszenie zmienione; odśwież"),409
+        return jsonify(ok=True)
+    except Exception:
+        return jsonify(error="Nie udało się zapisać pełnej treści"),503
+
+
 @bp.get("/api/warsztat/r238/requests")
 def list_requests():
     if not authorized(): return jsonify(error="Brak autoryzacji"), 403
@@ -61,7 +90,7 @@ def list_requests():
         rows = mobile_overlay(rows)
     except Exception:
         return jsonify(error="Nie udało się odczytać statusów mobile"),503
-    return jsonify(ok=True, requests=rows)
+    return jsonify(ok=True, requests=rows, mail_reply_all=True)
 
 @bp.post("/api/warsztat/r238/requests/<int:item_id>/start-repair")
 def start_repair(item_id):
@@ -151,7 +180,8 @@ def enqueue_mobile(item_id):
             if not body or len(body)>5000: return jsonify(error="Treść odpowiedzi: 1–5000 znaków"),400
             payload.update(email=email,body=body)
             if kind == "reply_photos": payload["photos"] = data["photos"]
-        inserted = mobile_jobs().insert(dict(request_id=item_id,kind=kind,payload=payload)).execute().data or []
+        reply_all = kind in ("complete","reply","reply_photos") and data.get("reply_all") is True and bool(re.search(r"\[AWM-MOBILE:[0-9a-f]{32}\]$",str(row.get("description",""))))
+        inserted = mobile_jobs().insert(dict(request_id=item_id,kind=kind,payload=payload,reply_all=reply_all)).execute().data or []
         if not inserted: raise RuntimeError("no job")
         return jsonify(ok=True,job=inserted[0]["id"]),202
     except Exception:
@@ -173,7 +203,10 @@ def claim_mobile():
         data = request.get_json(silent=True) or {}
         kinds = ["check","complete","reply","delete"]
         if isinstance(data,dict) and data.get("photo_worker") == 407: kinds.append("reply_photos")
-        candidates=mobile_jobs().select("id").eq("state","queued").in_("kind",kinds).order("id").limit(5).execute().data or []
+        query=mobile_jobs().select("id").eq("state","queued").in_("kind",kinds)
+        if not (isinstance(data,dict) and data.get("mail_worker") == 409):
+            query=query.eq("reply_all",False)
+        candidates=query.order("id").limit(5).execute().data or []
         for candidate in candidates:
             changed=mobile_jobs().update({"state":"processing"}).eq("id",candidate["id"]).eq("state","queued").execute().data or []
             if changed: return jsonify(ok=True,job=changed[0])
