@@ -1,10 +1,12 @@
 """R238 — durable workshop intake stored in Supabase. No automatic desktop import."""
 import os, secrets, hmac, re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify, session
 from awm_photo_payload import decode_photos
 
 bp = Blueprint("r238_workshop", __name__)
+READ_ACTIONS = ("history", "attachment")
+ATTACHMENT_LIMIT = 5 * 1024 * 1024
 
 def store():
     from supabase_backend import sb
@@ -90,7 +92,7 @@ def list_requests():
         rows = mobile_overlay(rows)
     except Exception:
         return jsonify(error="Nie udało się odczytać statusów mobile"),503
-    return jsonify(ok=True, requests=rows, mail_reply_all=True)
+    return jsonify(ok=True, requests=rows, mail_reply_all=True, mail_history_r419=True)
 
 @bp.post("/api/warsztat/r238/requests/<int:item_id>/start-repair")
 def start_repair(item_id):
@@ -157,8 +159,8 @@ def enqueue_mobile(item_id):
     data = request.get_json(silent=True) or {}
     if not isinstance(data,dict): return jsonify(error="Nieprawidłowe dane"),400
     kind = data.get("kind")
-    if kind not in ("check","complete","reply","delete","reply_photos"): return jsonify(error="Nieprawidłowa akcja"),400
-    if kind == "reply_photos":
+    if kind not in ("check","complete","reply","delete","reply_photos","reply_edited","reply_edited_photos",*READ_ACTIONS): return jsonify(error="Nieprawidłowa akcja"),400
+    if kind in ("reply_photos","reply_edited_photos"):
         try: decode_photos(data.get("photos"))
         except ValueError as exc: return jsonify(error=str(exc)),400
     elif "photos" in data:
@@ -170,18 +172,50 @@ def enqueue_mobile(item_id):
         if not current: return jsonify(error="Zgłoszenie usunięte"),409
         row = current[0]
         if kind in ("check","complete") and row["status"] != "new": return jsonify(error="Zgłoszenie nie jest nowe"),409
-        active = mobile_jobs().select("id,kind,state").eq("request_id",item_id).in_("state",["queued","processing"]).limit(1).execute().data or []
-        if active: return jsonify(error="Operacja jest już w kolejce",job=active[0]),409
+        if kind not in READ_ACTIONS:
+            active = mobile_jobs().select("id,kind,state").eq("request_id",item_id).in_("state",["queued","processing"]).in_("kind",["check","complete","reply","delete","reply_photos","reply_edited","reply_edited_photos"]).limit(1).execute().data or []
+            if active: return jsonify(error="Operacja jest już w kolejce",job=active[0]),409
         payload = {"row":row}
-        if kind in ("complete","reply","reply_photos"):
+        if kind in (*READ_ACTIONS,"reply_edited","reply_edited_photos"):
+            if not re.search(r"\[AWM-MOBILE:[0-9a-f]{32}\]$",str(row.get("description",""))): return jsonify(error="Brak zgłoszenia Gmail"),400
+        if kind == "attachment":
+            message, part = data.get("message"), data.get("part")
+            if not isinstance(message,str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",message):
+                return jsonify(error="Nieprawidłowy identyfikator wiadomości"),400
+            if not isinstance(part,str) or not re.fullmatch(r"[A-Za-z0-9_.-]{0,128}",part):
+                return jsonify(error="Nieprawidłowy identyfikator załącznika"),400
+            payload.update(message=message,part=part)
+        if kind in READ_ACTIONS:
+            now = datetime.now(timezone.utc)
+            mobile_jobs().update({"payload":{},"read_expires_at":None}).lt("read_expires_at",now.isoformat()).eq("state","done").in_("kind",list(READ_ACTIONS)).execute()
+            mobile_jobs().update({"payload":{},"read_expires_at":None,"state":"failed","error":"Upłynął czas oczekiwania na komputer"}).lt("read_expires_at",now.isoformat()).in_("state",["queued","processing"]).in_("kind",list(READ_ACTIONS)).execute()
+            pending = mobile_jobs().select("id,payload").eq("request_id",item_id).eq("kind",kind).in_("state",["queued","processing"]).execute().data or []
+            for job in pending:
+                if all(job["payload"].get(key) == payload.get(key) for key in ("message","part")):
+                    return jsonify(ok=True,job=job["id"]),202
+        if kind in ("reply_edited","reply_edited_photos"):
+            recipients=data.get("recipients")
+            if not isinstance(recipients,dict): return jsonify(error="Brak odbiorców"),400
+            for group in ("to","cc"):
+                values=recipients.get(group)
+                if not isinstance(values,list) or len(values)>30 or any(not isinstance(v,str) or not re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+",v) for v in values): return jsonify(error="Nieprawidłowi odbiorcy"),400
+            if not recipients["to"]: return jsonify(error="Brak Do"),400
+            payload["recipients"]={k:recipients[k] for k in ("to","cc")}
+            thread=data.get("thread")
+            if not isinstance(thread,str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",thread): return jsonify(error="Brak wątku"),400
+            payload["thread"]=thread
+        if kind in ("complete","reply","reply_photos","reply_edited","reply_edited_photos"):
             email = str(row.get("email") or "").strip()
             if not re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+",email): return jsonify(error="Brak poprawnego adresu nadawcy zgłoszenia"),400
             body = "Dzień dobry,\n\nZlecenie zostało zrealizowane.\n\nPozdrawiamy AWM Warsztat" if kind == "complete" else str(data.get("body") or "").strip()
             if not body or len(body)>5000: return jsonify(error="Treść odpowiedzi: 1–5000 znaków"),400
             payload.update(email=email,body=body)
-            if kind == "reply_photos": payload["photos"] = data["photos"]
+            if kind in ("reply_photos","reply_edited_photos"): payload["photos"] = data["photos"]
         reply_all = kind in ("complete","reply","reply_photos") and data.get("reply_all") is True and bool(re.search(r"\[AWM-MOBILE:[0-9a-f]{32}\]$",str(row.get("description",""))))
-        inserted = mobile_jobs().insert(dict(request_id=item_id,kind=kind,payload=payload,reply_all=reply_all)).execute().data or []
+        values = dict(request_id=item_id,kind=kind,payload=payload,reply_all=reply_all)
+        if kind in READ_ACTIONS:
+            values["read_expires_at"] = (now + timedelta(minutes=2)).isoformat()
+        inserted = mobile_jobs().insert(values).execute().data or []
         if not inserted: raise RuntimeError("no job")
         return jsonify(ok=True,job=inserted[0]["id"]),202
     except Exception:
@@ -191,7 +225,14 @@ def enqueue_mobile(item_id):
 def mobile_state(job_id):
     if not authorized(): return jsonify(error="Brak autoryzacji"),403
     try:
-        result=mobile_jobs().select("id,state,error").eq("id",job_id).limit(1).execute().data or []
+        result=mobile_jobs().select("id,state,error,kind,payload,read_expires_at").eq("id",job_id).limit(1).execute().data or []
+        if result:
+            job=result[0]; payload=job.pop("payload",{}) or {}; kind=job.pop("kind",None)
+            expires = job.pop("read_expires_at",None)
+            if kind in READ_ACTIONS:
+                if not expires or datetime.fromisoformat(expires) <= datetime.now(timezone.utc):
+                    return jsonify(error="Wynik wygasł. Odśwież korespondencję."),410
+                if job["state"]=="done": job[kind]=payload.get(kind)
         return (jsonify(ok=True,job=result[0]),200) if result else (jsonify(error="Brak operacji"),404)
     except Exception:
         return jsonify(error="Nie udało się pobrać stanu operacji"),503
@@ -203,6 +244,9 @@ def claim_mobile():
         data = request.get_json(silent=True) or {}
         kinds = ["check","complete","reply","delete"]
         if isinstance(data,dict) and data.get("photo_worker") == 407: kinds.append("reply_photos")
+        if isinstance(data,dict) and data.get("history_worker")==419 and data.get("mail_worker")==409:
+            kinds.extend(["history","reply_edited","reply_edited_photos"])
+            if data.get("attachment_worker")==419: kinds.append("attachment")
         query=mobile_jobs().select("id").eq("state","queued").in_("kind",kinds)
         if not (isinstance(data,dict) and data.get("mail_worker") == 409):
             query=query.eq("reply_all",False)
@@ -217,6 +261,8 @@ def claim_mobile():
 @bp.post("/api/warsztat/r238/mobile-actions/<int:job_id>/finish")
 def finish_mobile(job_id):
     if not authorized(): return jsonify(error="Brak autoryzacji"),403
+    if request.content_length is None or request.content_length > 7100000:
+        return jsonify(error="Przekroczono limit danych"),413
     data=request.get_json(silent=True) or {}
     if not isinstance(data,dict): return jsonify(error="Nieprawidłowe dane"),400
     state=data.get("state")
@@ -224,7 +270,27 @@ def finish_mobile(job_id):
     try:
         update={"state":state,"error":str(data.get("error") or "")[:500]}
         rows=mobile_jobs().select("kind,payload").eq("id",job_id).eq("state","processing").limit(1).execute().data or []
-        if rows and rows[0]["kind"] == "reply_photos":
+        if rows and rows[0]["kind"] in READ_ACTIONS:
+            update["read_expires_at"]=(datetime.now(timezone.utc)+timedelta(minutes=2)).isoformat()
+            if state=="failed":
+                update["payload"]={}
+        if rows and rows[0]["kind"] == "attachment" and state=="done":
+            attachment=data.get("attachment")
+            if not isinstance(attachment,dict) or not isinstance(attachment.get("data"),str) or len(attachment["data"]) > ((ATTACHMENT_LIMIT+2)//3)*4:
+                return jsonify(error="Nieprawidłowy lub za duży załącznik"),400
+            update["payload"]={"attachment":attachment}
+        if rows and rows[0]["kind"] == "history" and state=="done":
+            history=data.get("history")
+            if not isinstance(history,dict) or not isinstance(history.get("messages"),list): return jsonify(error="Brak historii"),400
+            import json
+            if len(json.dumps(history,ensure_ascii=False).encode())>2000000: return jsonify(error="Historia za duża"),413
+            thread=history.get("thread")
+            if not isinstance(thread,str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",thread):
+                return jsonify(error="Brak identyfikatora Gmail"),400
+            request_id=rows[0]["payload"]["row"]["id"]
+            store().update({"gmail_thread_id":thread}).eq("id",request_id).execute()
+            update["payload"]={"history":history}
+        if rows and rows[0]["kind"] in ("reply_photos","reply_edited_photos"):
             payload=dict(rows[0]["payload"])
             payload.pop("photos",None)
             update["payload"]=payload
